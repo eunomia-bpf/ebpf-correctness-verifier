@@ -195,9 +195,13 @@ rule learning third
 ## First Milestones
 
 1. Keep a reproducible PREVAIL build and run selected YAML/object fixtures.
-2. Vendor K2/superopt and run selected eBPF tests against modern system Z3.
-3. Add a local CLI that emits JSON for `PASS`, `FAIL`, and `UNKNOWN`.
-4. Extract a K2-derived old/new equivalence command for supported object slices.
-5. Add real object fixtures and mutation tests.
-6. Add optional kernel verifier load gate and `BPF_PROG_RUN` replay.
-7. Add agent-facing JSON feedback.
+2. Done: vendor K2/superopt and run selected eBPF tests against modern system
+   Z3.
+3. Done: add a local CLI that emits JSON for `PASS`, `FAIL`, and `UNKNOWN`.
+4. Done for the first supported slice: extract a K2-derived old/new equivalence
+   command and wire it into `ebpf-tv check --equiv-backend k2`.
+5. In progress: add real object fixtures and mutation tests beyond the minimal
+   clang-produced return-value smoke.
+6. Add automatic map/desc/BTF/CO-RE environment extraction for K2.
+7. Add optional kernel verifier load gate and `BPF_PROG_RUN` replay.
+8. Add agent-facing JSON feedback.

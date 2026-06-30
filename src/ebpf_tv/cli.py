@@ -84,6 +84,12 @@ def resolve_tool(tool: str) -> str | None:
     return shutil.which(tool)
 
 
+def resolve_objcopy(tool: str) -> str | None:
+    if tool != "auto":
+        return resolve_tool(tool)
+    return shutil.which("llvm-objcopy") or shutil.which("objcopy")
+
+
 def run_prevail(
     name: str,
     obj: Path,
@@ -177,6 +183,35 @@ def run_external_equivalence(
     return stage
 
 
+def run_objcopy_dump_section(
+    name: str,
+    obj: Path,
+    section: str,
+    output: Path,
+    objcopy_bin: str,
+    timeout: int,
+) -> StageResult:
+    tool = resolve_objcopy(objcopy_bin)
+    if tool is None:
+        return StageResult(name=name, result=UNKNOWN, reason="objcopy_not_found")
+
+    stage = run_command(
+        [tool, f"--dump-section={section}={output}", str(obj)],
+        timeout,
+    )
+    stage.name = name
+    if stage.exit_code == 0 and output.exists() and output.stat().st_size > 0:
+        stage.result = PASS
+        stage.reason = "section_extracted"
+    elif stage.exit_code == 0:
+        stage.result = UNKNOWN
+        stage.reason = "empty_or_missing_section_dump"
+    else:
+        stage.result = UNKNOWN
+        stage.reason = "section_extract_failed"
+    return stage
+
+
 def combine(stages: Iterable[StageResult]) -> str:
     results = [stage.result for stage in stages]
     if FAIL in results:
@@ -222,6 +257,92 @@ def run_k2_equiv(
         ],
         timeout=timeout,
     )
+
+
+def run_k2_elf_equivalence(
+    old: Path,
+    new: Path,
+    section: str,
+    k2_equiv: str,
+    k2_root: str,
+    k2_map: str,
+    k2_desc: str,
+    objcopy_bin: str,
+    timeout: int,
+) -> list[StageResult]:
+    stages: list[StageResult] = []
+    tool = resolve_tool(k2_equiv)
+    if tool is None:
+        return [
+            StageResult(
+                name="equivalence",
+                result=UNKNOWN,
+                reason="k2_equiv_not_found",
+            )
+        ]
+
+    for name, path in (
+        ("input_k2_root", Path(k2_root)),
+        ("input_k2_map", Path(k2_map)),
+        ("input_k2_desc", Path(k2_desc)),
+    ):
+        if not path.exists():
+            stages.append(StageResult(name=name, result=FAIL, reason="file_not_found"))
+
+    if stages:
+        return stages
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        old_insns = tmp_path / "old.ins"
+        new_insns = tmp_path / "new.ins"
+        stages.append(
+            run_objcopy_dump_section(
+                "extract_old",
+                old,
+                section,
+                old_insns,
+                objcopy_bin,
+                timeout,
+            )
+        )
+        stages.append(
+            run_objcopy_dump_section(
+                "extract_new",
+                new,
+                section,
+                new_insns,
+                objcopy_bin,
+                timeout,
+            )
+        )
+
+        if combine(stages) == PASS:
+            stage = run_k2_equiv(
+                tool,
+                k2_root,
+                old_insns,
+                new_insns,
+                Path(k2_map),
+                Path(k2_desc),
+                timeout,
+            )
+            stage.name = "equivalence"
+            if stage.exit_code == 0:
+                stage.result = PASS
+                stage.reason = "k2_equivalence_pass"
+            elif stage.exit_code == 1:
+                stage.result = FAIL
+                stage.reason = "k2_equivalence_fail"
+            elif stage.exit_code == 2:
+                stage.result = UNKNOWN
+                stage.reason = "k2_equivalence_unknown"
+            elif stage.result == FAIL:
+                stage.result = UNKNOWN
+                stage.reason = "k2_equivalence_error"
+            stages.append(stage)
+
+    return stages
 
 
 def run_k2_equiv_smoke(
@@ -328,7 +449,7 @@ def check(args: argparse.Namespace) -> int:
 
         if args.equiv_backend == "identity":
             stages.append(run_identity_equivalence(old, new))
-        else:
+        elif args.equiv_backend == "external":
             stages.append(
                 run_external_equivalence(
                     old,
@@ -336,6 +457,20 @@ def check(args: argparse.Namespace) -> int:
                     args.section,
                     args.function,
                     args.equiv_command,
+                    args.timeout,
+                )
+            )
+        else:
+            stages.extend(
+                run_k2_elf_equivalence(
+                    old,
+                    new,
+                    args.section,
+                    args.k2_equiv,
+                    args.k2_root,
+                    args.k2_map,
+                    args.k2_desc,
+                    args.objcopy_bin,
                     args.timeout,
                 )
             )
@@ -389,15 +524,24 @@ def build_parser() -> argparse.ArgumentParser:
     check_parser.add_argument("--prevail-bin", default="prevail")
     check_parser.add_argument(
         "--equiv-backend",
-        choices=["identity", "external"],
+        choices=["identity", "external", "k2"],
         default="identity",
-        help="identity is a conservative smoke backend; external uses exit codes 0/1/2 for PASS/FAIL/UNKNOWN.",
+        help="identity is conservative; external and k2 use exit codes 0/1/2 for PASS/FAIL/UNKNOWN.",
     )
     check_parser.add_argument(
         "--equiv-command",
         nargs=argparse.REMAINDER,
         default=[],
         help="external equivalence command; supports {old}, {new}, {section}, {function}",
+    )
+    check_parser.add_argument("--k2-equiv", default="k2_ebpf_equiv")
+    check_parser.add_argument("--k2-root")
+    check_parser.add_argument("--k2-map")
+    check_parser.add_argument("--k2-desc")
+    check_parser.add_argument(
+        "--objcopy-bin",
+        default="auto",
+        help="tool used to dump ELF sections for K2; 'auto' prefers llvm-objcopy then objcopy",
     )
     check_parser.add_argument("--timeout", type=int, default=30)
     check_parser.add_argument("--output", choices=["text", "json"], default="json")
@@ -418,6 +562,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "check" and args.equiv_backend == "external" and not args.equiv_command:
         parser.error("--equiv-backend external requires --equiv-command")
+    if args.command == "check" and args.equiv_backend == "k2":
+        missing = [
+            name
+            for name in ("k2_root", "k2_map", "k2_desc")
+            if not getattr(args, name)
+        ]
+        if missing:
+            formatted = ", ".join("--" + name.replace("_", "-") for name in missing)
+            parser.error(f"--equiv-backend k2 requires {formatted}")
     return args.func(args)
 
 

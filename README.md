@@ -67,6 +67,19 @@ PYTHONPATH=src python3 -m ebpf_tv check old.bpf.o new.bpf.o \
   --prevail-bin /path/to/prevail
 ```
 
+Run the full v0 gate with PREVAIL and the K2 backend:
+
+```bash
+PYTHONPATH=src python3 -m ebpf_tv check old.bpf.o new.bpf.o \
+  --section xdp \
+  --prevail-bin /path/to/prevail \
+  --equiv-backend k2 \
+  --k2-equiv build/k2_ebpf_equiv \
+  --k2-root third_party/k2-superopt \
+  --k2-map program.maps \
+  --k2-desc program.desc
+```
+
 The CLI returns JSON by default:
 
 ```json
@@ -120,9 +133,10 @@ PASS =
 
 The default equivalence backend is intentionally conservative: byte-identical
 objects pass, non-identical objects return `UNKNOWN` unless an external
-equivalence backend is configured. The vendored K2 backend currently accepts
-raw K2 `.ins` bytecode plus `.maps` and `.desc` metadata; ELF section extraction
-into that backend is the next adapter layer.
+equivalence backend is configured. The vendored K2 backend can be selected with
+`--equiv-backend k2`; `ebpf-tv` extracts the requested ELF section with
+`llvm-objcopy`/`objcopy`, then calls the K2 raw-instruction checker with
+user-supplied `.maps` and `.desc` metadata.
 
 ## Documents
 
@@ -136,5 +150,5 @@ into that backend is the next adapter layer.
 
 This repository now contains a first runnable `ebpf-tv` CLI, a PREVAIL backend
 adapter, a conservative equivalence backend contract, vendored K2 source, and a
-modern-Z3 K2 equivalence smoke target with PASS and FAIL fixtures. It is not
-yet a complete old/new ELF object equivalence checker.
+modern-Z3 K2 equivalence backend with unit tests and an ELF-section integration
+smoke test. It is not yet a complete CO-RE/BTF-aware object equivalence checker.

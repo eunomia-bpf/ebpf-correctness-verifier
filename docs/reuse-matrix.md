@@ -28,7 +28,7 @@ Implemented v0:
 ```text
 PREVAIL safety/invariant gate
   + vendored K2/superopt source
-  + modern-Z3 K2 raw-instruction equivalence backend
+  + modern-Z3 K2 ELF-section/raw-instruction equivalence backend
   + ebpf-tv JSON frontend
   + conservative equivalence backend contract
 ```

@@ -63,4 +63,11 @@ if (EBPF_TV_BUILD_K2_SMOKE)
       "$<TARGET_FILE:k2_ebpf_equiv>"
       "${K2_DIR}"
   )
+  add_test(NAME ebpf_tv_k2_cli_integration
+    COMMAND "${Python3_EXECUTABLE}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/k2_cli_integration.py"
+      "$<TARGET_FILE:k2_ebpf_equiv>"
+      "${K2_DIR}"
+      "${CMAKE_CURRENT_SOURCE_DIR}"
+  )
 endif ()

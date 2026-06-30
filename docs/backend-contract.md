@@ -51,8 +51,8 @@ The default `identity` backend is only a smoke backend:
 - byte-identical objects are `PASS`
 - non-identical objects are `UNKNOWN`
 
-Production equivalence must use `--equiv-backend external`. The external command
-contract is:
+Production equivalence must use either `--equiv-backend k2` or
+`--equiv-backend external`. The external command contract is:
 
 ```text
 exit 0 -> PASS
@@ -75,7 +75,20 @@ license. The repository also provides a modern CMake smoke target,
 `k2_ebpf_inst_codegen_test`, that builds K2's eBPF instruction and map-helper
 semantics test against the system Z3 library.
 
-The first extracted equivalence backend is `k2_ebpf_equiv`:
+The project exposes K2 through `ebpf-tv check --equiv-backend k2`:
+
+```bash
+PYTHONPATH=src python3 -m ebpf_tv check OLD.o NEW.o \
+  --section xdp \
+  --prevail-bin /path/to/prevail \
+  --equiv-backend k2 \
+  --k2-equiv build/k2_ebpf_equiv \
+  --k2-root third_party/k2-superopt \
+  --k2-map PROGRAM.maps \
+  --k2-desc PROGRAM.desc
+```
+
+The first extracted internal backend is `k2_ebpf_equiv`:
 
 ```bash
 build/k2_ebpf_equiv \
@@ -99,14 +112,17 @@ exit 2 -> UNKNOWN, unsupported instruction/model path, malformed input, or K2 er
 
 Current scope:
 
-- raw K2 `.ins` bytecode inputs
+- `ebpf-tv` dumps one ELF section from each object using `llvm-objcopy` or
+  `objcopy`
+- `k2_ebpf_equiv` checks raw K2 `.ins` bytecode inputs
 - one shared `.maps` and `.desc` environment for old/new
 - in-process system Z3, not K2's old z3server path
-- smoke-tested on generated minimal eBPF programs for both PASS and FAIL
+- smoke-tested on generated raw eBPF programs and clang-produced ELF objects
+  for both PASS and FAIL
 
 Known gaps:
 
-- no ELF section extraction into `.ins` yet
+- no automatic map/desc extraction from ELF metadata yet
 - no CO-RE/BTF relocation modeling yet
 - complex K2 fixtures can still hit old unsupported pointer-model paths and must
   return `UNKNOWN`

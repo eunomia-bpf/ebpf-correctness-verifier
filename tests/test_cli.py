@@ -174,6 +174,154 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result["result"], "FAIL")
             self.assertEqual(result["stages"][-1]["reason"], "external_equivalence_fail")
 
+    def test_k2_equivalence_backend_passes_identical_extracted_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            old = tmp_path / "old.o"
+            old.write_bytes(b"old-elf")
+            maps = tmp_path / "empty.maps"
+            desc = tmp_path / "constant.desc"
+            maps.write_text("")
+            desc.write_text("{ pgm_input_type = 0, }\n{ max_pkt_sz = 0, }\n")
+            prevail = make_executable(
+                tmp_path / "prevail",
+                """\
+                #!/usr/bin/env sh
+                echo "PASS: $2/func"
+                """,
+            )
+            objcopy = make_executable(
+                tmp_path / "objcopy",
+                """\
+                #!/usr/bin/env sh
+                spec="${1#--dump-section=}"
+                out="${spec#*=}"
+                case "$2" in
+                  *old.o) printf old > "$out" ;;
+                  *new.o) printf new > "$out" ;;
+                  *) exit 1 ;;
+                esac
+                """,
+            )
+            k2_equiv = make_executable(
+                tmp_path / "k2_equiv",
+                """\
+                #!/usr/bin/env sh
+                while [ "$#" -gt 0 ]; do
+                  case "$1" in
+                    --old) shift; old="$1" ;;
+                    --new) shift; new="$1" ;;
+                  esac
+                  shift
+                done
+                cmp -s "$old" "$new"
+                """,
+            )
+
+            completed = run_cli(
+                [
+                    "check",
+                    str(old),
+                    str(old),
+                    "--section",
+                    "xdp",
+                    "--prevail-bin",
+                    str(prevail),
+                    "--equiv-backend",
+                    "k2",
+                    "--k2-equiv",
+                    str(k2_equiv),
+                    "--k2-root",
+                    str(tmp_path),
+                    "--k2-map",
+                    str(maps),
+                    "--k2-desc",
+                    str(desc),
+                    "--objcopy-bin",
+                    str(objcopy),
+                ]
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            result = json.loads(completed.stdout)
+            self.assertEqual(result["result"], "PASS")
+            self.assertEqual(result["stages"][-1]["reason"], "k2_equivalence_pass")
+
+    def test_k2_equivalence_backend_fails_different_extracted_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            old = tmp_path / "old.o"
+            new = tmp_path / "new.o"
+            old.write_bytes(b"old-elf")
+            new.write_bytes(b"new-elf")
+            maps = tmp_path / "empty.maps"
+            desc = tmp_path / "constant.desc"
+            maps.write_text("")
+            desc.write_text("{ pgm_input_type = 0, }\n{ max_pkt_sz = 0, }\n")
+            prevail = make_executable(
+                tmp_path / "prevail",
+                """\
+                #!/usr/bin/env sh
+                echo "PASS: $2/func"
+                """,
+            )
+            objcopy = make_executable(
+                tmp_path / "objcopy",
+                """\
+                #!/usr/bin/env sh
+                spec="${1#--dump-section=}"
+                out="${spec#*=}"
+                case "$2" in
+                  *old.o) printf old > "$out" ;;
+                  *new.o) printf new > "$out" ;;
+                  *) exit 1 ;;
+                esac
+                """,
+            )
+            k2_equiv = make_executable(
+                tmp_path / "k2_equiv",
+                """\
+                #!/usr/bin/env sh
+                while [ "$#" -gt 0 ]; do
+                  case "$1" in
+                    --old) shift; old="$1" ;;
+                    --new) shift; new="$1" ;;
+                  esac
+                  shift
+                done
+                cmp -s "$old" "$new"
+                """,
+            )
+
+            completed = run_cli(
+                [
+                    "check",
+                    str(old),
+                    str(new),
+                    "--section",
+                    "xdp",
+                    "--prevail-bin",
+                    str(prevail),
+                    "--equiv-backend",
+                    "k2",
+                    "--k2-equiv",
+                    str(k2_equiv),
+                    "--k2-root",
+                    str(tmp_path),
+                    "--k2-map",
+                    str(maps),
+                    "--k2-desc",
+                    str(desc),
+                    "--objcopy-bin",
+                    str(objcopy),
+                ]
+            )
+
+            self.assertEqual(completed.returncode, 1)
+            result = json.loads(completed.stdout)
+            self.assertEqual(result["result"], "FAIL")
+            self.assertEqual(result["stages"][-1]["reason"], "k2_equivalence_fail")
+
     def test_missing_prevail_is_unknown(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             obj = Path(tmp) / "prog.o"
