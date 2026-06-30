@@ -9,7 +9,7 @@ Last checked: 2026-06-30.
 | [`smartnic/sigcomm21_artifact`](https://github.com/smartnic/sigcomm21_artifact) | K2 reproduction wrapper | Useful experiments and documentation | Not the core library to fork |
 | [`smartnic/bpf-elf-tools`](https://github.com/smartnic/bpf-elf-tools) | ELF extraction and patching for K2 | Useful historical object workflow | Older libbpf/object assumptions |
 | [EPSO paper](https://arxiv.org/html/2511.15589v1) | Cached rewrite-rule superoptimizer | Excellent architecture for proof-carrying rule DB | No obvious public implementation found |
-| [Heimdall paper](https://arxiv.org/html/2605.25411v1) | LLM migration plus symbolic-execution/Z3 equivalence | Best newer agent-loop blueprint; reports 96/102 proven-equivalent migrations | No public reusable backend found; angr/eBPF lifting would still be substantial custom code |
+| [Heimdall paper](https://arxiv.org/html/2605.25411v1) | LLM migration plus symbolic-execution/Z3 equivalence | Best newer agent-loop and evaluation blueprint; useful map/global/output/atomic fixture source | No public reusable backend found; angr/eBPF lifting would still be substantial custom code |
 | [`4ar0nma0/Merlin`](https://github.com/4ar0nma0/Merlin) | Multi-tier eBPF optimizer | Optimization ideas and benchmark baseline | Not a semantic validator foundation |
 | [`trailofbits/ebpf-verifier`](https://github.com/trailofbits/ebpf-verifier) | Userspace Linux verifier harness | Kernel-version verifier matrix | Older PoC; not semantic equivalence |
 | [`dslab-epfl/ebpf-se`](https://github.com/dslab-epfl/ebpf-se) | KLEE-based symbolic execution | Symbolic-execution reference | Not old/new equivalence by itself |
@@ -58,3 +58,8 @@ Port or wrap only the parts that remain useful:
 - K2 instruction semantics, map model tests, equivalence-query structure, and
   optimization-window concept
 - eBPF-SE example setup and KLEE path-count outputs
+- Heimdall-style gate structure, counterexample fields, and fixture categories
+  if the required semantics are available through an existing backend
+
+If Heimdall's implementation becomes public, evaluate it as an optional adapter
+backend before considering any local symbolic-execution implementation.

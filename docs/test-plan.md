@@ -19,6 +19,18 @@ make test
 - K2 raw equivalence wrapper smoke tests
 - `ebpf-tv check --equiv-backend k2` ELF-section integration tests
 
+The optional PREVAIL gate is:
+
+```bash
+make test-prevail-smoke
+```
+
+It clones a pinned upstream PREVAIL checkout, applies the local CMake
+compatibility patch documented in `docs/reproduction-notes.md`, builds
+`prevail` and `run_yaml`, and runs selected YAML and object smoke tests. It is
+available as a manual GitHub Actions workflow because it depends on network
+access and upstream build stability.
+
 ## Coverage Matrix
 
 | Layer | Test entrypoint | What it proves | Current cases |
@@ -28,6 +40,24 @@ make test
 | K2 instruction semantics | vendored `k2_ebpf_inst_codegen_test` via CTest | selected K2 eBPF instruction, memory, map-helper, map-equivalence, and packet formulas still build and run against modern system Z3 | inherited K2 smoke cases |
 | ELF adapter | `tests/k2_cli_integration.py` via CTest | `ebpf-tv` extracts ELF sections, generates default K2 metadata, and invokes K2 through the single CLI | byte-identical pass, ALU rewrite pass, stack-memory rewrite pass, return-value fail |
 | CI | `.github/workflows/ci.yml` | fresh Ubuntu build installs dependencies and runs the same local gate | Python 3, clang/llvm, CMake, libz3-dev |
+| Optional PREVAIL smoke | `make test-prevail-smoke`, `.github/workflows/prevail-smoke.yml` | real PREVAIL build and sample fixtures still work at the pinned commit | `add.yaml`, `map.yaml`, `minimal.bpf.o` |
+
+## Heimdall-Derived Acceptance Lessons
+
+The Heimdall paper is relevant because it measures the gap between compiling,
+kernel-verifier acceptance, safety policy, and bytecode equivalence. Its results
+support this project's default rule: a verifier pass is only an input to the
+gate, not a transformation-correctness proof.
+
+As backend support grows, add fixtures in this order:
+
+- map lookup/update/delete with symbolic keys and last-write-wins behavior
+- mutable globals paired with map state
+- output sinks in both default sink mode and strict byte-comparison mode
+- entry-point/program-type mismatch as a pre-symbolic-execution rejection
+- dropped atomic operation as a structural `FAIL`
+- helper-failure modeling that returns `UNKNOWN` when the backend cannot prove
+  both programs use the same helper outcome model
 
 ## Current Positive Fixtures
 
@@ -58,10 +88,11 @@ CI currently tests the PREVAIL adapter contract with fake PREVAIL commands:
 - verifier/unmarshalling rejection text is treated as `FAIL`
 - a missing PREVAIL binary is treated as `UNKNOWN`
 
-Actual PREVAIL build and sample-object reproduction are documented in
-`docs/reproduction-notes.md`, but they are not yet part of CI. Adding a pinned
-PREVAIL smoke test is a required step before claiming end-to-end safety coverage
-from a clean checkout.
+Actual PREVAIL build and sample-object reproduction are covered by the optional
+`make test-prevail-smoke` target and manual `PREVAIL Smoke` workflow. This is a
+reproducibility gate for PREVAIL integration, not part of the default CI gate.
+End-to-end safety coverage still requires wiring real PREVAIL results into
+regular old/new object checks.
 
 ## Missing Coverage
 
@@ -72,6 +103,10 @@ The following are intentionally not claimed yet:
 - helper side effects beyond K2's inherited smoke tests
 - map update/delete equivalence through `ebpf-tv check`
 - packet/context memory equivalence through `ebpf-tv check`
+- mutable global equivalence
+- ringbuf/perf-event output sink tracking
+- atomicity-preservation structural checks
+- program-type/context compatibility checks before equivalence
 - target-kernel verifier loading
 - `BPF_PROG_RUN` replay or differential execution
 - agent-facing counterexample minimization

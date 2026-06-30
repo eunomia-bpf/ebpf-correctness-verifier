@@ -88,7 +88,13 @@ LLMs to migrate legacy libbpf C programs to Aya Rust, then checks the generated
 bytecode against the original with symbolic execution and Z3. Its design also
 feeds structured counterexamples back to the LLM, which is exactly the loop an
 agent optimizer should use. The paper reports 96 formally proven-equivalent
-translations out of 102 eBPF programs.
+translations out of 102 attempted eBPF translations.
+
+Its architecture is a useful sanity check for this project: compilation and
+kernel-verifier acceptance are only early filters. Heimdall adds a source-level
+safety policy and a bytecode-level symbolic-equivalence query, and its
+evaluation shows that many verifier-passing translations still fail downstream
+safety or equivalence checks.
 
 Most relevant ideas:
 
@@ -96,7 +102,9 @@ Most relevant ideas:
 - symbolic execution summaries per path
 - shared symbolic variables for old/new program inputs
 - map modeling with write chains / ITE-style lookup semantics
+- mutable global modeling alongside map state
 - explicit output sink modeling for ringbuf/perf output
+- structural checks for program-type compatibility and dropped atomics
 - `UNKNOWN` behavior when helper or model coverage is insufficient
 
 Caveat: I did not find a public repository that can be used directly. Recreating
@@ -104,6 +112,7 @@ its angr-style eBPF ELF backend, architecture definition, instruction lifter,
 helper stubs, ITE-chain map encoding, and formula generator would be a
 substantial new symbolic-execution implementation. Treat the paper as a design
 reference for agent feedback and evaluation, not as the first backend to reuse.
+See `docs/heimdall-notes.md` for the detailed implementation takeaways.
 
 ### EPSO
 
@@ -312,6 +321,8 @@ to make it usable and reusable for modern eBPF:
 - counterexample feedback for agents
 - proof-carrying rewrite-rule database
 - conservative `UNKNOWN` handling for unsupported features
+- Heimdall-style tests that demonstrate kernel-verifier pass is not equivalent
+  to transformation correctness
 
 ## Initial Scope
 
@@ -323,6 +334,8 @@ Reproduce and support first:
 - K2 map helper and map-equivalence tests
 - K2 packet-equivalence tests that are stable on current hosts
 - eBPF-SE one small XDP example in a containerized KLEE environment
+- Heimdall-style map/global/output/atomic fixtures once the selected backend can
+  model each feature conservatively
 
 Defer or return `UNKNOWN` first:
 

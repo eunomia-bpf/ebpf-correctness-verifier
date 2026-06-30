@@ -13,6 +13,7 @@ dist/
 vmlinux.h
 
 # Local tooling
+.cache/
 .env
 .venv/
 __pycache__/

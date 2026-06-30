@@ -192,9 +192,15 @@ performance second
 rule learning third
 ```
 
+This matches the lesson from Heimdall: compilation and kernel-verifier success
+are not enough. The maintained gate must keep safety-policy failures,
+equivalence counterexamples, unsupported helper models, and structural mismatches
+as separate feedback classes.
+
 ## First Milestones
 
-1. Keep a reproducible PREVAIL build and run selected YAML/object fixtures.
+1. Done as an optional gate: keep a reproducible PREVAIL build and run selected
+   YAML/object fixtures through `make test-prevail-smoke`.
 2. Done: vendor K2/superopt and run selected eBPF tests against modern system
    Z3.
 3. Done: add a local CLI that emits JSON for `PASS`, `FAIL`, and `UNKNOWN`.
@@ -208,5 +214,7 @@ rule learning third
    Track coverage in `docs/test-plan.md`.
 7. In progress: add K2 environment handling. A no-map constant-input default is
    generated automatically; map/desc/BTF/CO-RE extraction remains.
-8. Add optional kernel verifier load gate and `BPF_PROG_RUN` replay.
-9. Add agent-facing JSON feedback.
+8. Add Heimdall-derived fixtures for maps, globals, output sinks, atomics, and
+   entry-point type checks as backend coverage becomes available.
+9. Add optional kernel verifier load gate and `BPF_PROG_RUN` replay.
+10. Add agent-facing JSON feedback.

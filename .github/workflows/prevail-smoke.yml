@@ -1,0 +1,24 @@
+name: PREVAIL Smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  prevail-smoke:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake \
+            g++ \
+            git \
+            libboost-dev \
+            python3
+
+      - name: Run PREVAIL smoke
+        run: make test-prevail-smoke PREVAIL_DIR="$RUNNER_TEMP/prevail"

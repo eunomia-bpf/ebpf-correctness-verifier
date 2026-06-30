@@ -41,7 +41,7 @@ Result:
 - `prevail-cli` needed a local CMake quoting patch for
   `PREVAIL_VERSION_STRING` on this host.
 
-Local patch used only for reproduction:
+Compatibility patch used by `make test-prevail-smoke`:
 
 ```diff
 -target_compile_definitions(prevail-cli PRIVATE PREVAIL_VERSION_STRING="${prevail_VERSION_STRING}")
@@ -92,6 +92,16 @@ Observed result:
 - listed `section=tp/syscalls/sys_enter_write function=handle_tp`
 - returned `PASS: tp/syscalls/sys_enter_write/handle_tp`
 - rejected invalid lddw with `unmarshaling error at 1: incomplete lddw`
+
+Automated smoke entrypoint:
+
+```bash
+make test-prevail-smoke
+```
+
+This clones the pinned PREVAIL commit into `.cache/prevail` by default, applies
+the compatibility patch above, builds `prevail` and `run_yaml`, and runs
+`add.yaml`, `map.yaml`, and the minimal object smoke.
 
 Conclusion:
 

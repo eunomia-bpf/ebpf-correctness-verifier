@@ -84,6 +84,18 @@ PYTHONPATH=src python3 -m ebpf_tv check old.bpf.o new.bpf.o \
   --k2-root third_party/k2-superopt
 ```
 
+Run the optional real PREVAIL smoke against a pinned upstream checkout:
+
+```bash
+make test-prevail-smoke
+```
+
+This clones `vbpf/prevail` outside the tracked source tree, applies the small
+`PREVAIL_VERSION_STRING` CMake compatibility patch needed by current compilers,
+builds `prevail` and `run_yaml`, then runs YAML and object smoke tests. It is
+kept out of the default `make test` gate because it depends on network access
+and upstream build behavior.
+
 The CLI returns JSON by default:
 
 ```json
@@ -147,6 +159,7 @@ metadata.
 
 - [Research survey](docs/research-survey.md)
 - [Reuse matrix](docs/reuse-matrix.md)
+- [Heimdall notes](docs/heimdall-notes.md)
 - [MVP architecture](docs/mvp-architecture.md)
 - [Backend contract](docs/backend-contract.md)
 - [Test plan](docs/test-plan.md)
@@ -161,6 +174,9 @@ instruction semantics, the K2 raw equivalence wrapper, and the `ebpf-tv check
 checks byte-identical objects, non-identical equivalent rewrites
 (`r0 = 1` versus `r0 = 0; r0 += 1`, and direct register return versus
 stack store/load), and a return-value counterexample.
+
+The optional `PREVAIL Smoke` workflow can be run manually from GitHub Actions to
+verify the pinned real PREVAIL build and object/YAML fixtures.
 
 ## Status
 

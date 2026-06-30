@@ -1,4 +1,4 @@
-.PHONY: test test-python test-k2-smoke
+.PHONY: test test-python test-k2-smoke test-prevail-smoke
 
 test: test-python test-k2-smoke
 
@@ -9,3 +9,6 @@ test-k2-smoke:
 	cmake -S . -B build
 	cmake --build build --target k2_ebpf_inst_codegen_test k2_ebpf_equiv -j
 	ctest --test-dir build --output-on-failure
+
+test-prevail-smoke:
+	scripts/prevail-smoke.sh
