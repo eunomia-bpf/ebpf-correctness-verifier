@@ -75,6 +75,38 @@ license. The repository also provides a modern CMake smoke target,
 `k2_ebpf_inst_codegen_test`, that builds K2's eBPF instruction and map-helper
 semantics test against the system Z3 library.
 
-This is not yet a complete old/new object equivalence backend. It is the first
-maintainable step toward extracting K2's useful equivalence core without keeping
-its old build system as the project entrypoint.
+The first extracted equivalence backend is `k2_ebpf_equiv`:
+
+```bash
+build/k2_ebpf_equiv \
+  --old OLD.ins \
+  --new NEW.ins \
+  --map PROGRAM.maps \
+  --desc PROGRAM.desc \
+  --k2-root third_party/k2-superopt
+```
+
+It uses K2's raw eBPF instruction reader, benchmark metadata reader, and
+`validator::is_equal_to` implementation. The project-owned wrapper only handles
+argument validation, K2 working-directory setup, noisy stdout isolation, JSON
+result formatting, and exit-code normalization:
+
+```text
+exit 0 -> PASS,    K2 proved equivalence
+exit 1 -> FAIL,    K2 produced a semantic counterexample
+exit 2 -> UNKNOWN, unsupported instruction/model path, malformed input, or K2 error
+```
+
+Current scope:
+
+- raw K2 `.ins` bytecode inputs
+- one shared `.maps` and `.desc` environment for old/new
+- in-process system Z3, not K2's old z3server path
+- smoke-tested on generated minimal eBPF programs for both PASS and FAIL
+
+Known gaps:
+
+- no ELF section extraction into `.ins` yet
+- no CO-RE/BTF relocation modeling yet
+- complex K2 fixtures can still hit old unsupported pointer-model paths and must
+  return `UNKNOWN`

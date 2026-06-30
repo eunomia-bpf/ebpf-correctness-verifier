@@ -5,8 +5,10 @@ import hashlib
 import json
 import os
 import shutil
+import struct
 import subprocess
 import sys
+import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Iterable
@@ -15,6 +17,9 @@ from typing import Iterable
 PASS = "PASS"
 FAIL = "FAIL"
 UNKNOWN = "UNKNOWN"
+
+BPF_ALU64_MOV_K = 0xB7
+BPF_EXIT = 0x95
 
 
 @dataclass
@@ -181,6 +186,115 @@ def combine(stages: Iterable[StageResult]) -> str:
     return PASS
 
 
+def raw_bpf_insn(
+    opcode: int, dst: int = 0, src: int = 0, off: int = 0, imm: int = 0
+) -> bytes:
+    regs = (dst & 0x0F) | ((src & 0x0F) << 4)
+    return struct.pack("<BBhi", opcode, regs, off, imm)
+
+
+def raw_return_constant(value: int) -> bytes:
+    return raw_bpf_insn(BPF_ALU64_MOV_K, dst=0, imm=value) + raw_bpf_insn(BPF_EXIT)
+
+
+def run_k2_equiv(
+    k2_equiv: str,
+    k2_root: str,
+    old: Path,
+    new: Path,
+    maps: Path,
+    desc: Path,
+    timeout: int,
+) -> StageResult:
+    return run_command(
+        [
+            k2_equiv,
+            "--old",
+            str(old),
+            "--new",
+            str(new),
+            "--map",
+            str(maps),
+            "--desc",
+            str(desc),
+            "--k2-root",
+            k2_root,
+        ],
+        timeout=timeout,
+    )
+
+
+def run_k2_equiv_smoke(
+    k2_equiv: str | None, k2_root: str | None, timeout: int
+) -> StageResult:
+    if not k2_equiv:
+        return StageResult(
+            name="k2_equiv_smoke",
+            result=UNKNOWN,
+            reason="k2_equiv_not_configured",
+        )
+    tool = resolve_tool(k2_equiv)
+    if tool is None:
+        return StageResult(
+            name="k2_equiv_smoke",
+            result=UNKNOWN,
+            reason="k2_equiv_not_found",
+        )
+    if not k2_root:
+        return StageResult(
+            name="k2_equiv_smoke",
+            result=UNKNOWN,
+            reason="k2_root_not_configured",
+        )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        ret0 = tmp_path / "ret0.ins"
+        ret0_copy = tmp_path / "ret0-copy.ins"
+        ret1 = tmp_path / "ret1.ins"
+        maps = tmp_path / "empty.maps"
+        desc = tmp_path / "constant.desc"
+
+        ret0.write_bytes(raw_return_constant(0))
+        ret0_copy.write_bytes(raw_return_constant(0))
+        ret1.write_bytes(raw_return_constant(1))
+        maps.write_text("")
+        desc.write_text("{ pgm_input_type = 0, }\n{ max_pkt_sz = 0, }\n")
+
+        pass_stage = run_k2_equiv(tool, k2_root, ret0, ret0_copy, maps, desc, timeout)
+        fail_stage = run_k2_equiv(tool, k2_root, ret0, ret1, maps, desc, timeout)
+
+    stdout = (
+        "PASS case stdout:\n"
+        + pass_stage.stdout
+        + "\nFAIL case stdout:\n"
+        + fail_stage.stdout
+    )
+    stderr = (
+        "PASS case stderr:\n"
+        + pass_stage.stderr
+        + "\nFAIL case stderr:\n"
+        + fail_stage.stderr
+    )
+    if pass_stage.exit_code == 0 and fail_stage.exit_code == 1:
+        return StageResult(
+            name="k2_equiv_smoke",
+            result=PASS,
+            reason="k2_equiv_pass_fail_smoke",
+            command=[tool, "--k2-root", k2_root],
+            stdout=stdout,
+            stderr=stderr,
+        )
+    return StageResult(
+        name="k2_equiv_smoke",
+        result=FAIL,
+        reason="k2_equiv_smoke_failed",
+        command=[tool, "--k2-root", k2_root],
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+
 def check(args: argparse.Namespace) -> int:
     old = Path(args.old)
     new = Path(args.new)
@@ -253,6 +367,8 @@ def selftest(args: argparse.Namespace) -> int:
                 reason="k2_inst_codegen_test_not_configured",
             )
         )
+    if args.k2_equiv or args.k2_root:
+        stages.append(run_k2_equiv_smoke(args.k2_equiv, args.k2_root, args.timeout))
     result = ValidationResult(combine(stages), stages)
     print(result.to_json())
     return 0 if result.result == PASS else 1
@@ -289,6 +405,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     selftest_parser = subparsers.add_parser("selftest", help="run backend smoke tests")
     selftest_parser.add_argument("--k2-inst-codegen-test")
+    selftest_parser.add_argument("--k2-equiv")
+    selftest_parser.add_argument("--k2-root")
     selftest_parser.add_argument("--timeout", type=int, default=120)
     selftest_parser.set_defaults(func=selftest)
 

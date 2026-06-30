@@ -9,7 +9,7 @@ Last checked: 2026-06-30.
 | [`smartnic/sigcomm21_artifact`](https://github.com/smartnic/sigcomm21_artifact) | K2 reproduction wrapper | Useful experiments and documentation | Not the core library to fork |
 | [`smartnic/bpf-elf-tools`](https://github.com/smartnic/bpf-elf-tools) | ELF extraction and patching for K2 | Useful historical object workflow | Older libbpf/object assumptions |
 | [EPSO paper](https://arxiv.org/html/2511.15589v1) | Cached rewrite-rule superoptimizer | Excellent architecture for proof-carrying rule DB | No obvious public implementation found |
-| [Heimdall paper](https://arxiv.org/html/2605.25411v1) | LLM migration plus Z3 equivalence | Best agent-loop blueprint | No public reusable repo found |
+| [Heimdall paper](https://arxiv.org/html/2605.25411v1) | LLM migration plus symbolic-execution/Z3 equivalence | Best newer agent-loop blueprint; reports 96/102 proven-equivalent migrations | No public reusable backend found; angr/eBPF lifting would still be substantial custom code |
 | [`4ar0nma0/Merlin`](https://github.com/4ar0nma0/Merlin) | Multi-tier eBPF optimizer | Optimization ideas and benchmark baseline | Not a semantic validator foundation |
 | [`trailofbits/ebpf-verifier`](https://github.com/trailofbits/ebpf-verifier) | Userspace Linux verifier harness | Kernel-version verifier matrix | Older PoC; not semantic equivalence |
 | [`dslab-epfl/ebpf-se`](https://github.com/dslab-epfl/ebpf-se) | KLEE-based symbolic execution | Symbolic-execution reference | Not old/new equivalence by itself |
@@ -28,7 +28,7 @@ Implemented v0:
 ```text
 PREVAIL safety/invariant gate
   + vendored K2/superopt source
-  + modern-Z3 K2 smoke target
+  + modern-Z3 K2 raw-instruction equivalence backend
   + ebpf-tv JSON frontend
   + conservative equivalence backend contract
 ```
@@ -45,9 +45,12 @@ adapter harness over PREVAIL, K2, eBPF-SE, kernel verifier, BPF_PROG_RUN
 ## Decision
 
 Use PREVAIL as the first runnable analysis base. Use `smartnic/superopt` as the
-semantic reference implementation and test source, not as the final
-architecture. Build the maintained project around adapters and reproducible
-experiments before writing new verifier or symbolic-execution code.
+semantic reference implementation and test source, with a maintained wrapper
+around the useful K2 equivalence path. Heimdall is newer than K2 as a system
+design, but without a reusable release it should influence the agent feedback
+loop and evaluation, not replace K2/PREVAIL as the first implementation base.
+Build the maintained project around adapters and reproducible experiments before
+writing new verifier or symbolic-execution code.
 
 Port or wrap only the parts that remain useful:
 

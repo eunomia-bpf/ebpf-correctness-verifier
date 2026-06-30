@@ -213,6 +213,51 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result["result"], "PASS")
             self.assertEqual(result["stages"][0]["reason"], "k2_modern_z3_smoke")
 
+    def test_selftest_runs_k2_equiv_pass_fail_smoke(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            smoke = make_executable(
+                tmp_path / "smoke",
+                """\
+                #!/usr/bin/env sh
+                exit 0
+                """,
+            )
+            k2_equiv = make_executable(
+                tmp_path / "k2_equiv",
+                """\
+                #!/usr/bin/env sh
+                while [ "$#" -gt 0 ]; do
+                  if [ "$1" = "--new" ]; then
+                    shift
+                    case "$1" in
+                      *ret1.ins) exit 1 ;;
+                      *) exit 0 ;;
+                    esac
+                  fi
+                  shift
+                done
+                exit 2
+                """,
+            )
+
+            completed = run_cli(
+                [
+                    "selftest",
+                    "--k2-inst-codegen-test",
+                    str(smoke),
+                    "--k2-equiv",
+                    str(k2_equiv),
+                    "--k2-root",
+                    str(tmp_path),
+                ]
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            result = json.loads(completed.stdout)
+            self.assertEqual(result["result"], "PASS")
+            self.assertEqual(result["stages"][1]["reason"], "k2_equiv_pass_fail_smoke")
+
 
 if __name__ == "__main__":
     unittest.main()

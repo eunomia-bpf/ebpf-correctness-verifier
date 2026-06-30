@@ -87,7 +87,8 @@ Heimdall is the closest match for an agent-driven eBPF correctness loop. It uses
 LLMs to migrate legacy libbpf C programs to Aya Rust, then checks the generated
 bytecode against the original with symbolic execution and Z3. Its design also
 feeds structured counterexamples back to the LLM, which is exactly the loop an
-agent optimizer should use.
+agent optimizer should use. The paper reports 96 formally proven-equivalent
+translations out of 102 eBPF programs.
 
 Most relevant ideas:
 
@@ -98,8 +99,11 @@ Most relevant ideas:
 - explicit output sink modeling for ringbuf/perf output
 - `UNKNOWN` behavior when helper or model coverage is insufficient
 
-Caveat: I did not find a public repository that can be used directly. Treat the
-paper as a design reference, not as reusable code.
+Caveat: I did not find a public repository that can be used directly. Recreating
+its angr-style eBPF ELF backend, architecture definition, instruction lifter,
+helper stubs, ITE-chain map encoding, and formula generator would be a
+substantial new symbolic-execution implementation. Treat the paper as a design
+reference for agent feedback and evaluation, not as the first backend to reuse.
 
 ### EPSO
 
@@ -256,6 +260,8 @@ Cons:
 - heavier dependencies
 - harder to make a small, auditable checker
 - equivalence-specific modeling still needs custom work
+- Heimdall shows this route can work, but it is not currently the
+  lowest-code-reuse path for a maintained open-source tool
 
 ### Option E: LLVM IR / Alive2 First
 

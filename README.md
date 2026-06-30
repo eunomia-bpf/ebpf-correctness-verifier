@@ -39,6 +39,26 @@ Build and run the vendored K2 eBPF semantics smoke test against the system Z3:
 make test-k2-smoke
 ```
 
+Run the K2-derived raw-instruction equivalence backend directly:
+
+```bash
+build/k2_ebpf_equiv \
+  --old old.ins \
+  --new new.ins \
+  --map program.maps \
+  --desc program.desc \
+  --k2-root third_party/k2-superopt
+```
+
+Or run both K2 smoke checks through the Python frontend:
+
+```bash
+PYTHONPATH=src python3 -m ebpf_tv selftest \
+  --k2-inst-codegen-test build/k2_ebpf_inst_codegen_test \
+  --k2-equiv build/k2_ebpf_equiv \
+  --k2-root third_party/k2-superopt
+```
+
 Run the CLI with an already-built PREVAIL binary:
 
 ```bash
@@ -85,8 +105,9 @@ analyzers and a vendored K2-derived equivalence core:
 
 K2 is vendored under `third_party/k2-superopt` with its original MIT license and
 provenance notes. The root CMake build compiles a K2 eBPF instruction/codegen
-smoke test against the system Z3 library, avoiding K2's old requirement for a
-sibling `../z3/build/config.mk` checkout.
+smoke test and a K2-derived raw-instruction equivalence backend against the
+system Z3 library, avoiding K2's old requirement for a sibling
+`../z3/build/config.mk` checkout.
 
 The v0 rule is:
 
@@ -99,8 +120,9 @@ PASS =
 
 The default equivalence backend is intentionally conservative: byte-identical
 objects pass, non-identical objects return `UNKNOWN` unless an external
-equivalence backend is configured. This keeps the public CLI honest while the
-K2-derived old/new equivalence CLI is extracted.
+equivalence backend is configured. The vendored K2 backend currently accepts
+raw K2 `.ins` bytecode plus `.maps` and `.desc` metadata; ELF section extraction
+into that backend is the next adapter layer.
 
 ## Documents
 
@@ -114,5 +136,5 @@ K2-derived old/new equivalence CLI is extracted.
 
 This repository now contains a first runnable `ebpf-tv` CLI, a PREVAIL backend
 adapter, a conservative equivalence backend contract, vendored K2 source, and a
-modern-Z3 K2 smoke target. It is not yet a complete old/new eBPF equivalence
-checker.
+modern-Z3 K2 equivalence smoke target with PASS and FAIL fixtures. It is not
+yet a complete old/new ELF object equivalence checker.
