@@ -1,0 +1,23 @@
+# Build artifacts
+target/
+build/
+dist/
+*.o
+*.so
+*.a
+*.out
+
+# eBPF generated outputs
+*.bpf.o
+*.skel.h
+vmlinux.h
+
+# Local tooling
+.env
+.venv/
+__pycache__/
+
+# Editor files
+.idea/
+.vscode/
+*.swp
