@@ -27,32 +27,40 @@ observable behavior of the original program.
 
 ## Current Recommendation
 
-The best immediate reuse target is
-[`smartnic/superopt`](https://github.com/smartnic/superopt), the public K2 code
-base. It already contains an eBPF ISA formalization, a Z3-backed equivalence
-checking path, stochastic search, and eBPF-specific verification structure.
+The first implementation should not be a from-scratch symbolic executor. The
+better strategy is to build a reproduction and adapter harness around existing
+analyzers:
 
-Do not treat K2 as a turnkey production validator. Treat it as the closest
-available semantic-checking reference implementation and source of reusable
-ideas/tests. For a maintained eunomia-bpf project, the stronger long-term path
-is a clean validator library built around modern eBPF object tooling:
+- [`vbpf/prevail`](https://github.com/vbpf/prevail) as the default safety,
+  CFG, abstract-interpretation, and invariant baseline.
+- [`smartnic/superopt`](https://github.com/smartnic/superopt), the K2 code base,
+  as the closest available eBPF equivalence-checking reference and test source.
+- [`dslab-epfl/ebpf-se`](https://github.com/dslab-epfl/ebpf-se) as a KLEE-based
+  symbolic-execution baseline for selected examples, preferably containerized.
+- kernel verifier and `BPF_PROG_RUN` as the target-kernel compatibility and
+  concrete replay gates.
 
-- Rust path: `aya-obj` / Aya + Z3 bindings + custom eBPF symbolic executor.
-- Go path: `cilium/ebpf` + `cilium/ebpf/asm` + Z3 or SMT-LIB emission.
+PREVAIL is a better first substrate than implementing verifier-like abstract
+interpretation or CFG reasoning ourselves. K2 still matters because PREVAIL is a
+safety verifier, not an old/new semantic equivalence checker. The project should
+therefore be an adapter-plus-comparison harness first, and only implement small
+missing glue where no reusable tool exists.
 
 The recommended MVP is:
 
-1. Reproduce a small K2 equivalence-checking example.
-2. Build a standalone bytecode parser and normalizer.
-3. Support helper-free ALU, branch, stack, and packet-read equivalence.
-4. Add a strict `PASS` / `FAIL` / `UNKNOWN` result model.
+1. Reproduce representative PREVAIL, K2, and eBPF-SE examples.
+2. Add a small local harness that records analyzer commands and expected results.
+3. Use PREVAIL as the first safety/invariant gate.
+4. Use K2 tests and semantics to evaluate equivalence-checking coverage.
 5. Add kernel verifier and `BPF_PROG_RUN` gates for concrete validation.
+6. Add a strict `PASS` / `FAIL` / `UNKNOWN` result model across all gates.
 
 ## Documents
 
 - [Research survey](docs/research-survey.md)
 - [Reuse matrix](docs/reuse-matrix.md)
 - [MVP architecture](docs/mvp-architecture.md)
+- [Reproduction notes](docs/reproduction-notes.md)
 
 ## Status
 

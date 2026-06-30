@@ -4,13 +4,13 @@ Last checked: 2026-06-30.
 
 | Project | Role | Reuse value | Caveat |
 | --- | --- | --- | --- |
-| [`smartnic/superopt`](https://github.com/smartnic/superopt) | K2 core optimizer and equivalence checker | Best direct semantic-checking code base; MIT; has `src/isa/ebpf`, `src/verify`, `src/search` | Research artifact, older eBPF/toolchain assumptions |
+| [`vbpf/prevail`](https://github.com/vbpf/prevail) | Abstract-interpretation verifier | Best first substrate for safety, CFG, invariants, object fixtures, and issue classification | Safety, not old/new semantic equivalence |
+| [`smartnic/superopt`](https://github.com/smartnic/superopt) | K2 core optimizer and equivalence checker | Best direct semantic-checking reference; MIT; has `src/isa/ebpf`, `src/verify`, `src/search` | Research artifact; full eBPF test run currently aborts in one validator path on this host |
 | [`smartnic/sigcomm21_artifact`](https://github.com/smartnic/sigcomm21_artifact) | K2 reproduction wrapper | Useful experiments and documentation | Not the core library to fork |
 | [`smartnic/bpf-elf-tools`](https://github.com/smartnic/bpf-elf-tools) | ELF extraction and patching for K2 | Useful historical object workflow | Older libbpf/object assumptions |
 | [EPSO paper](https://arxiv.org/html/2511.15589v1) | Cached rewrite-rule superoptimizer | Excellent architecture for proof-carrying rule DB | No obvious public implementation found |
 | [Heimdall paper](https://arxiv.org/html/2605.25411v1) | LLM migration plus Z3 equivalence | Best agent-loop blueprint | No public reusable repo found |
 | [`4ar0nma0/Merlin`](https://github.com/4ar0nma0/Merlin) | Multi-tier eBPF optimizer | Optimization ideas and benchmark baseline | Not a semantic validator foundation |
-| [`vbpf/prevail`](https://github.com/vbpf/prevail) | Abstract-interpretation verifier | Secondary safety check; invariant and CFG ideas | Safety, not equivalence |
 | [`trailofbits/ebpf-verifier`](https://github.com/trailofbits/ebpf-verifier) | Userspace Linux verifier harness | Kernel-version verifier matrix | Older PoC; not semantic equivalence |
 | [`dslab-epfl/ebpf-se`](https://github.com/dslab-epfl/ebpf-se) | KLEE-based symbolic execution | Symbolic-execution reference | Not old/new equivalence by itself |
 | [`aya-rs/aya`](https://github.com/aya-rs/aya) / `aya-obj` | Rust eBPF object and loader stack | Best Rust object/parser foundation | Formal semantics still custom |
@@ -26,9 +26,9 @@ Last checked: 2026-06-30.
 Short-term:
 
 ```text
-K2/superopt checker
-  + small wrapper CLI
-  + Z3
+PREVAIL safety/invariant gate
+  + K2/superopt equivalence examples
+  + eBPF-SE containerized symbolic-execution examples
   + kernel verifier load test
   + BPF_PROG_RUN concrete replay
 ```
@@ -36,23 +36,22 @@ K2/superopt checker
 Long-term:
 
 ```text
-aya-obj or cilium/ebpf parser
-  + custom normalized eBPF IR
-  + custom symbolic executor
-  + helper/map semantics registry
-  + Z3 backend
-  + kernel verifier matrix
-  + counterexample replay
+adapter harness over PREVAIL, K2, eBPF-SE, kernel verifier, BPF_PROG_RUN
+  + normalized result schema
+  + proof/refinement rule database
+  + selective custom semantics only where no analyzer covers the feature
 ```
 
 ## Decision
 
-Use `smartnic/superopt` as the semantic reference implementation, not as the
-final architecture. Build the maintained validator around modern object tooling,
-and port only the parts of K2 that remain useful:
+Use PREVAIL as the first runnable analysis base. Use `smartnic/superopt` as the
+semantic reference implementation and test source, not as the final
+architecture. Build the maintained project around adapters and reproducible
+experiments before writing new verifier or symbolic-execution code.
 
-- instruction semantics
-- CFG/path summarization ideas
-- equivalence-query structure
-- test cases
-- optimization-window concept
+Port or wrap only the parts that remain useful:
+
+- PREVAIL CFG, abstract states, safety result, and issue-kind output
+- K2 instruction semantics, map model tests, equivalence-query structure, and
+  optimization-window concept
+- eBPF-SE example setup and KLEE path-count outputs

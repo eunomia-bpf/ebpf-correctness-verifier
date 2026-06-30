@@ -10,15 +10,18 @@ validator today.
 
 The strongest finding is:
 
-- K2 is the closest reusable implementation for bytecode optimization plus
-  semantic equivalence checking.
+- PREVAIL is the best first runnable substrate for safety, CFG construction,
+  abstract interpretation, invariant extraction, and real eBPF fixture coverage.
+- K2 is the closest reusable reference for bytecode optimization plus semantic
+  equivalence checking, but it should be treated as a selective reference and
+  test source rather than the only harness.
 - Heimdall is the closest architecture for an LLM/agent loop with formal
   counterexample feedback, but it is currently best treated as a paper blueprint.
 - EPSO is the most relevant design for caching proven rewrite rules, but there
   is no obvious public implementation to reuse.
-- PREVAIL, Trail of Bits' verifier harness, VEP, Agni, and kernel verifier work
-  are about safety, verifier compatibility, or verifier soundness. They are
-  useful gates and references, but they do not replace semantic equivalence.
+- Trail of Bits' verifier harness, VEP, Agni, and kernel verifier work are about
+  safety, verifier compatibility, property proofs, or verifier soundness. They
+  are useful gates and references, but they do not replace semantic equivalence.
 
 ## What Must Be Proven
 
@@ -133,9 +136,11 @@ compiler optimization passes, not a reusable semantic equivalence checker.
 PREVAIL is an actively maintained abstract-interpretation-based eBPF verifier.
 It is valuable for:
 
-- a second safety gate
-- invariant extraction
-- verifier research comparison
+- the first safety gate in the prototype
+- CFG and abstract-state extraction
+- invariant extraction and verifier research comparison
+- issue classification for invalid programs
+- real object and YAML fixture coverage
 - faster local analysis than target-kernel loading in some workflows
 
 It should not be presented as transformation correctness by itself. It checks
@@ -175,7 +180,27 @@ the trusted base, but it is not a transformation validator.
 
 ## Technical Options
 
-### Option A: Fork K2/superopt
+### Option A: PREVAIL-First Adapter Harness
+
+Best first step.
+
+Pros:
+
+- actively maintained relative to the research artifacts
+- builds on modern C++ and has broad fixture coverage
+- already analyzes real ELF objects and YAML instruction tests
+- gives safety, CFG, abstract interpretation, and issue-kind outputs
+
+Cons:
+
+- does not compare old/new observable behavior
+- integration may require a thin CLI/library adapter
+- exact verifier behavior still needs target-kernel checks
+
+Use this as the default gate and source of invariants. Do not reimplement its
+abstract interpretation or CFG machinery.
+
+### Option B: Selective K2/superopt Reuse
 
 Best for the fastest semantic-checking prototype.
 
@@ -195,41 +220,25 @@ Cons:
 
 Use this to reproduce, understand, and bootstrap. Do not stop here.
 
-### Option B: Clean Rust Validator on aya-obj
+### Option C: Rust or Go Orchestration Layer
 
-Best long-term infrastructure path for eunomia-bpf.
-
-Pros:
-
-- modern eBPF object parsing with BTF and relocations
-- clean library boundary for a validator
-- good fit with existing Rust-based BPFix/verifier-analysis work
-- easier to expose as CLI, library, and agent gate
-
-Cons:
-
-- more implementation work
-- symbolic execution and helper models must be built
-- Z3 bindings and SMT expression management need careful design
-
-This is my recommended main implementation path.
-
-### Option C: Go Validator on cilium/ebpf
-
-Best for fast integration with mature loader/object tooling.
+Best long-term project shape for eunomia-bpf.
 
 Pros:
 
-- very mature eBPF library
-- strong object, BTF, asm, loading, and debugging support
-- easy to integrate `BPF_PROG_RUN` and verifier log workflows
+- can wrap PREVAIL, K2, eBPF-SE, kernel verifier, and `BPF_PROG_RUN`
+- can use `aya-obj`, Aya, `cilium/ebpf`, or libbpf for modern object handling
+- can expose a stable JSON result schema to agents
+- avoids putting every analysis feature in one new checker
 
 Cons:
 
-- less natural if the formal core wants Rust-style type boundaries
-- SMT expression layer must still be custom
+- orchestration cannot replace missing equivalence semantics
+- adapter outputs must be normalized carefully
+- tool version pinning is part of the TCB story
 
-This is a good alternative if the team wants Go ecosystem integration.
+This is the recommended maintained project layer. It should coordinate existing
+analyzers before adding any new formal semantics.
 
 ### Option D: angr or KLEE-Based Symbolic Execution
 
@@ -265,22 +274,23 @@ Cons:
 
 ## Recommended Direction
 
-Build the project as an "eBPF Alive2" with an agent-facing API:
+Build the project as a multi-analyzer correctness harness with an agent-facing
+API:
 
 ```text
 old.o, new.o, target kernel/BTF, equivalence mode
         |
         v
-normalize bytecode
+object/program selection and relocation
         |
         v
-kernel verifier compatibility gate
+PREVAIL safety, CFG, abstract-state, and invariant gate
         |
         v
-symbolic executor with helper/map models
+K2-style equivalence check for supported slices/programs
         |
         v
-Z3 old/new observable-difference query
+target kernel verifier and BPF_PROG_RUN replay
         |
         v
 PASS / FAIL(counterexample) / UNKNOWN
@@ -290,7 +300,8 @@ The novelty is not that equivalence checking exists. The novelty opportunity is
 to make it usable and reusable for modern eBPF:
 
 - maintained object/CO-RE/BTF integration
-- explicit helper and map semantics library
+- PREVAIL-backed safety and invariant extraction
+- curated K2/eBPF-SE equivalence and symbolic-execution examples
 - target-kernel verifier matrix
 - counterexample feedback for agents
 - proof-carrying rewrite-rule database
@@ -298,17 +309,16 @@ to make it usable and reusable for modern eBPF:
 
 ## Initial Scope
 
-Support first:
+Reproduce and support first:
 
-- ALU64 / ALU32
-- MOV, shifts, endian conversions
-- conditional branches
-- stack loads/stores
-- packet/context read-only access
-- simple map helpers: lookup, update, delete
-- deterministic helpers with symbolic outputs where appropriate
+- PREVAIL YAML fixtures for ALU/range, maps, packets, and loops
+- PREVAIL object fixtures for valid and invalid programs
+- K2 eBPF instruction-SMT tests
+- K2 map helper and map-equivalence tests
+- K2 packet-equivalence tests that are stable on current hosts
+- eBPF-SE one small XDP example in a containerized KLEE environment
 
-Return `UNKNOWN` first:
+Defer or return `UNKNOWN` first:
 
 - tail calls
 - unbounded or hard-to-summarize loops
@@ -333,3 +343,4 @@ Return `UNKNOWN` first:
 - Linux verifier docs: <https://docs.kernel.org/bpf/verifier.html>
 - Linux `BPF_PROG_RUN` docs: <https://docs.kernel.org/bpf/bpf_prog_run.html>
 - libbpf overview: <https://docs.kernel.org/bpf/libbpf/libbpf_overview.html>
+- Local reproduction notes: <reproduction-notes.md>

@@ -44,40 +44,41 @@ old source/object
 new source/object
         |
         v
-compile and normalize
+compile, relocate, and identify target programs
         |
         v
-apply or record target BTF/CO-RE relocation
+PREVAIL safety/invariant gate
         |
         v
-extract entry program bytecode
+K2/equivalence gate for supported slices or whole programs
         |
         v
 kernel verifier gate
         |
         v
-build CFG and symbolic summaries
-        |
-        v
-compare observable behavior with Z3
-        |
-        v
-counterexample replay and benchmark gate
+counterexample replay, BPF_PROG_RUN, and benchmark gate
 ```
 
-## Internal IR
+## Analyzer-First Design
 
-The first validator IR should be intentionally close to eBPF:
+Do not start by building a new symbolic executor. Start with adapters:
 
-- fixed register file `r0` through `r10`
-- 64-bit and 32-bit ALU semantics
-- explicit stack object
-- explicit packet/context object
-- map values as separate symbolic objects
-- helper calls as model-table entries
-- path condition per exit path
+- PREVAIL adapter for safety, CFG, abstract states, issue kinds, and invariants.
+- K2 adapter for existing eBPF SMT semantics and equivalence tests.
+- eBPF-SE adapter for KLEE path exploration on examples where setup cost is
+  acceptable.
+- Kernel adapter for target verifier logs and `BPF_PROG_RUN` replay.
 
-Avoid inventing a high-level IR until there is duplicated complexity to remove.
+Only implement missing glue:
+
+- normalized result schema
+- object/program selection
+- command orchestration
+- counterexample/result conversion
+- minimal equivalence wrappers around K2-style checks
+
+If a custom IR becomes necessary, keep it close to eBPF and derive it from
+existing analyzer outputs rather than replacing those analyzers.
 
 ## Observable Summary
 
@@ -196,11 +197,12 @@ rule learning third
 
 ## First Milestones
 
-1. Reproduce one K2/superopt equivalence-checking example.
-2. Extract a minimal eBPF instruction normalizer from object files.
-3. Implement helper-free symbolic execution for straight-line ALU programs.
-4. Add branch/path support.
-5. Add stack load/store support.
-6. Add map lookup/update/delete model.
-7. Add kernel verifier load gate and `BPF_PROG_RUN` replay.
-8. Add agent-facing JSON feedback.
+1. Keep a reproducible PREVAIL build and run selected YAML/object fixtures.
+2. Keep a reproducible K2/superopt build and run selected eBPF tests, including
+   map helper and packet-equivalence tests.
+3. Containerize eBPF-SE so KLEE/LLVM 12 setup does not mutate the host.
+4. Add a local `repro` script that runs the stable subset and emits JSON.
+5. Define adapter result schemas for `PASS`, `FAIL`, `UNKNOWN`, and
+   `UNSUPPORTED`.
+6. Add kernel verifier load gate and `BPF_PROG_RUN` replay for accepted objects.
+7. Add agent-facing JSON feedback.
