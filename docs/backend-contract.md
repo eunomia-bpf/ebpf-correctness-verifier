@@ -122,6 +122,8 @@ Current scope:
 - smoke-tested on generated raw eBPF programs and clang-produced ELF objects
   for byte-identical PASS, ALU and stack-memory equivalent rewrites, and
   semantic FAIL
+- raw-backend smoke coverage for explicit map metadata and packet-input
+  metadata, including supported PASS and FAIL cases
 
 Known gaps:
 

@@ -36,7 +36,7 @@ access and upstream build stability.
 | Layer | Test entrypoint | What it proves | Current cases |
 | --- | --- | --- | --- |
 | CLI orchestration | `tests/test_cli.py` | `ebpf-tv` combines backend results as `FAIL > UNKNOWN > PASS` | identity pass, non-identical unknown, PREVAIL reject, missing PREVAIL, external fail |
-| K2 backend contract | `tests/k2_equiv_smoke.py` via CTest | `k2_ebpf_equiv` returns normalized exit codes and JSON | byte-identical pass, return-value fail, stack store/load equivalent pass |
+| K2 backend contract | `tests/k2_equiv_smoke.py` via CTest | `k2_ebpf_equiv` returns normalized exit codes and JSON | byte-identical pass, return-value fail, stack store/load equivalent pass, map update/lookup pass/fail, packet read pass/fail |
 | K2 instruction semantics | vendored `k2_ebpf_inst_codegen_test` via CTest | selected K2 eBPF instruction, memory, map-helper, map-equivalence, and packet formulas still build and run against modern system Z3 | inherited K2 smoke cases |
 | ELF adapter | `tests/k2_cli_integration.py` via CTest | `ebpf-tv` extracts ELF sections, generates default K2 metadata, and invokes K2 through the single CLI | byte-identical pass, ALU rewrite pass, stack-memory rewrite pass, return-value fail |
 | CI | `.github/workflows/ci.yml` | fresh Ubuntu build installs dependencies and runs the same local gate | Python 3, clang/llvm, CMake, libz3-dev |
@@ -66,19 +66,26 @@ The K2 equivalence path currently has CI coverage for:
 - `r0 = 0; exit` versus itself
 - `r0 = 1; exit` versus `r0 = 0; r0 += 1; exit`
 - `r0 = r1; exit` versus `*(u32 *)(r10 - 4) = r1; r0 = *(u32 *)(r10 - 4); exit`
+- `map_update(k, r1); r0 = *map_lookup(k); exit` versus returning the same
+  stack value used for the update
+- packet byte read at offset 0 versus itself under packet-input metadata
 
 The first checks adapter plumbing. The second checks non-identical ALU
-equivalence. The third checks stack-memory modeling. These are intentionally
-small fixtures because they must remain stable across hosts and solver versions.
+equivalence. The third checks stack-memory modeling. The map and packet fixtures
+exercise K2 metadata parsing and the helper/memory models. These are
+intentionally small fixtures because they must remain stable across hosts and
+solver versions.
 
 ## Current Negative Fixtures
 
 The K2 equivalence path currently has CI coverage for:
 
 - `r0 = 0; exit` versus `r0 = 1; exit`
+- map update followed by lookup versus lookup-only
+- packet byte read at offset 0 versus offset 1
 
 This must return `FAIL`, not `UNKNOWN`, because the backend should produce a
-semantic counterexample for this supported slice.
+semantic counterexample for each supported slice.
 
 ## PREVAIL Coverage
 

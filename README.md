@@ -173,7 +173,9 @@ instruction semantics, the K2 raw equivalence wrapper, and the `ebpf-tv check
 --equiv-backend k2` ELF-section integration smoke test. The integration fixture
 checks byte-identical objects, non-identical equivalent rewrites
 (`r0 = 1` versus `r0 = 0; r0 += 1`, and direct register return versus
-stack store/load), and a return-value counterexample.
+stack store/load), and a return-value counterexample. The raw K2 backend smoke
+also covers explicit map metadata and packet-input metadata with supported
+PASS/FAIL cases.
 
 The optional `PREVAIL Smoke` workflow can be run manually from GitHub Actions to
 verify the pinned real PREVAIL build and object/YAML fixtures.

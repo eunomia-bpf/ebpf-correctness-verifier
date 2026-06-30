@@ -209,9 +209,10 @@ as separate feedback classes.
 5. Done: run Python, K2, and ELF-section integration tests in GitHub Actions
    through the same `make test` entrypoint used locally.
 6. In progress: add real object fixtures and mutation tests. CI now covers a
-   clang-produced object, ALU and stack-memory equivalent section rewrites, and
-   a return-value counterexample; broader helper/map/packet fixtures remain.
-   Track coverage in `docs/test-plan.md`.
+   clang-produced object, ALU and stack-memory equivalent section rewrites, a
+   return-value counterexample, and raw K2 map/packet PASS/FAIL fixtures.
+   Frontend-level map/packet object fixtures remain. Track coverage in
+   `docs/test-plan.md`.
 7. In progress: add K2 environment handling. A no-map constant-input default is
    generated automatically; map/desc/BTF/CO-RE extraction remains.
 8. Add Heimdall-derived fixtures for maps, globals, output sinks, atomics, and
