@@ -50,13 +50,10 @@ compile, relocate, and identify target programs
 PREVAIL safety/invariant gate
         |
         v
-K2/equivalence gate for supported slices or whole programs
+equivalence backend
         |
         v
-kernel verifier gate
-        |
-        v
-counterexample replay, BPF_PROG_RUN, and benchmark gate
+PASS / FAIL / UNKNOWN
 ```
 
 ## Analyzer-First Design
@@ -64,10 +61,9 @@ counterexample replay, BPF_PROG_RUN, and benchmark gate
 Do not start by building a new symbolic executor. Start with adapters:
 
 - PREVAIL adapter for safety, CFG, abstract states, issue kinds, and invariants.
-- K2 adapter for existing eBPF SMT semantics and equivalence tests.
-- eBPF-SE adapter for KLEE path exploration on examples where setup cost is
-  acceptable.
-- Kernel adapter for target verifier logs and `BPF_PROG_RUN` replay.
+- K2-derived backend for existing eBPF SMT semantics and equivalence tests.
+- Optional kernel adapter for target verifier logs and `BPF_PROG_RUN` replay
+  after the userspace core is stable.
 
 Only implement missing glue:
 
@@ -76,6 +72,7 @@ Only implement missing glue:
 - command orchestration
 - counterexample/result conversion
 - minimal equivalence wrappers around K2-style checks
+- modern build overlay for the K2-derived code
 
 If a custom IR becomes necessary, keep it close to eBPF and derive it from
 existing analyzer outputs rather than replacing those analyzers.
@@ -198,11 +195,9 @@ rule learning third
 ## First Milestones
 
 1. Keep a reproducible PREVAIL build and run selected YAML/object fixtures.
-2. Keep a reproducible K2/superopt build and run selected eBPF tests, including
-   map helper and packet-equivalence tests.
-3. Containerize eBPF-SE so KLEE/LLVM 12 setup does not mutate the host.
-4. Add a local `repro` script that runs the stable subset and emits JSON.
-5. Define adapter result schemas for `PASS`, `FAIL`, `UNKNOWN`, and
-   `UNSUPPORTED`.
-6. Add kernel verifier load gate and `BPF_PROG_RUN` replay for accepted objects.
+2. Vendor K2/superopt and run selected eBPF tests against modern system Z3.
+3. Add a local CLI that emits JSON for `PASS`, `FAIL`, and `UNKNOWN`.
+4. Extract a K2-derived old/new equivalence command for supported object slices.
+5. Add real object fixtures and mutation tests.
+6. Add optional kernel verifier load gate and `BPF_PROG_RUN` replay.
 7. Add agent-facing JSON feedback.

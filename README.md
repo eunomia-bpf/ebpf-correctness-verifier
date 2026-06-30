@@ -1,6 +1,6 @@
 # eBPF Correctness Verifier
 
-Research prototype and design notes for validating eBPF program
+`ebpf-tv` is a thin userspace translation-validation frontend for eBPF program
 transformations proposed by untrusted optimizers or agents.
 
 The core premise is:
@@ -25,44 +25,94 @@ The Linux kernel verifier is necessary but not sufficient. It can reject unsafe
 programs, but it does not prove that a transformed program preserves the
 observable behavior of the original program.
 
-## Current Recommendation
+## Quick Start
 
-The first implementation should not be a from-scratch symbolic executor. The
-better strategy is to build a reproduction and adapter harness around existing
-analyzers:
+Run the Python CLI tests:
 
-- [`vbpf/prevail`](https://github.com/vbpf/prevail) as the default safety,
-  CFG, abstract-interpretation, and invariant baseline.
-- [`smartnic/superopt`](https://github.com/smartnic/superopt), the K2 code base,
-  as the closest available eBPF equivalence-checking reference and test source.
-- [`dslab-epfl/ebpf-se`](https://github.com/dslab-epfl/ebpf-se) as a KLEE-based
-  symbolic-execution baseline for selected examples, preferably containerized.
-- kernel verifier and `BPF_PROG_RUN` as the target-kernel compatibility and
-  concrete replay gates.
+```bash
+make test-python
+```
 
-PREVAIL is a better first substrate than implementing verifier-like abstract
-interpretation or CFG reasoning ourselves. K2 still matters because PREVAIL is a
-safety verifier, not an old/new semantic equivalence checker. The project should
-therefore be an adapter-plus-comparison harness first, and only implement small
-missing glue where no reusable tool exists.
+Build and run the vendored K2 eBPF semantics smoke test against the system Z3:
 
-The recommended MVP is:
+```bash
+make test-k2-smoke
+```
 
-1. Reproduce representative PREVAIL, K2, and eBPF-SE examples.
-2. Add a small local harness that records analyzer commands and expected results.
-3. Use PREVAIL as the first safety/invariant gate.
-4. Use K2 tests and semantics to evaluate equivalence-checking coverage.
-5. Add kernel verifier and `BPF_PROG_RUN` gates for concrete validation.
-6. Add a strict `PASS` / `FAIL` / `UNKNOWN` result model across all gates.
+Run the CLI with an already-built PREVAIL binary:
+
+```bash
+PYTHONPATH=src python3 -m ebpf_tv check old.bpf.o new.bpf.o \
+  --section xdp \
+  --prevail-bin /path/to/prevail
+```
+
+The CLI returns JSON by default:
+
+```json
+{
+  "result": "UNKNOWN",
+  "stages": [
+    {
+      "name": "prevail_old",
+      "result": "PASS",
+      "reason": "prevail_pass"
+    },
+    {
+      "name": "prevail_new",
+      "result": "PASS",
+      "reason": "prevail_pass"
+    },
+    {
+      "name": "equivalence",
+      "result": "UNKNOWN",
+      "reason": "non_identical_requires_equivalence_backend"
+    }
+  ]
+}
+```
+
+## Current Design
+
+The implementation is deliberately not a from-scratch symbolic executor. The
+maintainable path is to keep the project as a small frontend over existing
+analyzers and a vendored K2-derived equivalence core:
+
+- PREVAIL is the safety, CFG, abstract-interpretation, and invariant backend.
+- Vendored K2/superopt is the eBPF equivalence-semantics source.
+- `ebpf-tv` owns the CLI, tri-state result schema, backend contracts, tests, and
+  modern build overlay.
+
+K2 is vendored under `third_party/k2-superopt` with its original MIT license and
+provenance notes. The root CMake build compiles a K2 eBPF instruction/codegen
+smoke test against the system Z3 library, avoiding K2's old requirement for a
+sibling `../z3/build/config.mk` checkout.
+
+The v0 rule is:
+
+```text
+PASS =
+  PREVAIL(old) PASS
+  AND PREVAIL(new) PASS
+  AND equivalence(old, new) PASS
+```
+
+The default equivalence backend is intentionally conservative: byte-identical
+objects pass, non-identical objects return `UNKNOWN` unless an external
+equivalence backend is configured. This keeps the public CLI honest while the
+K2-derived old/new equivalence CLI is extracted.
 
 ## Documents
 
 - [Research survey](docs/research-survey.md)
 - [Reuse matrix](docs/reuse-matrix.md)
 - [MVP architecture](docs/mvp-architecture.md)
+- [Backend contract](docs/backend-contract.md)
 - [Reproduction notes](docs/reproduction-notes.md)
 
 ## Status
 
-This repository currently contains the initial research and implementation plan.
-It intentionally does not include CI, packaging, or a heavy dependency stack yet.
+This repository now contains a first runnable `ebpf-tv` CLI, a PREVAIL backend
+adapter, a conservative equivalence backend contract, vendored K2 source, and a
+modern-Z3 K2 smoke target. It is not yet a complete old/new eBPF equivalence
+checker.

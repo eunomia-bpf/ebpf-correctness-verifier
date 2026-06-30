@@ -23,14 +23,14 @@ Last checked: 2026-06-30.
 
 ## Best Reuse Stack
 
-Short-term:
+Implemented v0:
 
 ```text
 PREVAIL safety/invariant gate
-  + K2/superopt equivalence examples
-  + eBPF-SE containerized symbolic-execution examples
-  + kernel verifier load test
-  + BPF_PROG_RUN concrete replay
+  + vendored K2/superopt source
+  + modern-Z3 K2 smoke target
+  + ebpf-tv JSON frontend
+  + conservative equivalence backend contract
 ```
 
 Long-term:

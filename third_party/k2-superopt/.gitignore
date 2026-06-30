@@ -1,0 +1,9 @@
+*.out
+*.dSYM/
+*.o
+*.txt
+.idea
+*.xlsx
+*.insns
+*.desc
+*.bpf_insns
