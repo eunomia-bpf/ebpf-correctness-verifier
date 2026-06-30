@@ -83,9 +83,7 @@ PYTHONPATH=src python3 -m ebpf_tv check OLD.o NEW.o \
   --prevail-bin /path/to/prevail \
   --equiv-backend k2 \
   --k2-equiv build/k2_ebpf_equiv \
-  --k2-root third_party/k2-superopt \
-  --k2-map PROGRAM.maps \
-  --k2-desc PROGRAM.desc
+  --k2-root third_party/k2-superopt
 ```
 
 The first extracted internal backend is `k2_ebpf_equiv`:
@@ -115,14 +113,19 @@ Current scope:
 - `ebpf-tv` dumps one ELF section from each object using `llvm-objcopy` or
   `objcopy`
 - `k2_ebpf_equiv` checks raw K2 `.ins` bytecode inputs
-- one shared `.maps` and `.desc` environment for old/new
+- one shared K2 environment for old/new
+- generated no-map constant-input environment when `--k2-map` and `--k2-desc`
+  are omitted
+- explicit `.maps` and `.desc` overrides for programs that need packet, context,
+  or map modeling
 - in-process system Z3, not K2's old z3server path
 - smoke-tested on generated raw eBPF programs and clang-produced ELF objects
   for both PASS and FAIL
 
 Known gaps:
 
-- no automatic map/desc extraction from ELF metadata yet
+- no automatic map/desc extraction from ELF metadata yet; generated metadata is
+  intentionally only a simple default
 - no CO-RE/BTF relocation modeling yet
 - complex K2 fixtures can still hit old unsupported pointer-model paths and must
   return `UNKNOWN`

@@ -49,8 +49,6 @@ def run_check(
     prevail: Path,
     k2_equiv: Path,
     k2_root: Path,
-    maps: Path,
-    desc: Path,
 ) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(repo_root / "src")
@@ -72,10 +70,6 @@ def run_check(
             str(k2_equiv),
             "--k2-root",
             str(k2_root),
-            "--k2-map",
-            str(maps),
-            "--k2-desc",
-            str(desc),
             "--objcopy-bin",
             "llvm-objcopy",
             "--timeout",
@@ -108,8 +102,6 @@ def main(argv: list[str]) -> int:
         ret1_c = tmp_path / "ret1.c"
         ret0_o = tmp_path / "ret0.o"
         ret1_o = tmp_path / "ret1.o"
-        maps = tmp_path / "empty.maps"
-        desc = tmp_path / "constant.desc"
         prevail = make_executable(
             tmp_path / "prevail",
             """\
@@ -125,28 +117,19 @@ def main(argv: list[str]) -> int:
         """
         ret0_c.write_text(template.replace("VALUE", "0"), encoding="utf-8")
         ret1_c.write_text(template.replace("VALUE", "1"), encoding="utf-8")
-        maps.write_text("", encoding="utf-8")
-        desc.write_text(
-            "{ pgm_input_type = 0, }\n{ max_pkt_sz = 0, }\n",
-            encoding="utf-8",
-        )
 
         if not compile_bpf(clang, ret0_c, ret0_o):
             return 0
         if not compile_bpf(clang, ret1_c, ret1_o):
             return 0
 
-        same = run_check(
-            repo_root, ret0_o, ret0_o, prevail, k2_equiv, k2_root, maps, desc
-        )
+        same = run_check(repo_root, ret0_o, ret0_o, prevail, k2_equiv, k2_root)
         assert same.returncode == 0, (same.stdout, same.stderr)
         same_payload = json.loads(same.stdout)
         assert same_payload["result"] == "PASS", same_payload
         assert same_payload["stages"][-1]["reason"] == "k2_equivalence_pass", same_payload
 
-        diff = run_check(
-            repo_root, ret0_o, ret1_o, prevail, k2_equiv, k2_root, maps, desc
-        )
+        diff = run_check(repo_root, ret0_o, ret1_o, prevail, k2_equiv, k2_root)
         assert diff.returncode == 1, (diff.stdout, diff.stderr)
         diff_payload = json.loads(diff.stdout)
         assert diff_payload["result"] == "FAIL", diff_payload

@@ -21,6 +21,13 @@ UNKNOWN = "UNKNOWN"
 BPF_ALU64_MOV_K = 0xB7
 BPF_EXIT = 0x95
 
+K2_INPUT_TYPES = {
+    "constant": 0,
+    "pkt": 1,
+    "pkt-ptrs": 2,
+    "skb": 3,
+}
+
 
 @dataclass
 class StageResult:
@@ -265,8 +272,10 @@ def run_k2_elf_equivalence(
     section: str,
     k2_equiv: str,
     k2_root: str,
-    k2_map: str,
-    k2_desc: str,
+    k2_map: str | None,
+    k2_desc: str | None,
+    k2_input_type: str,
+    k2_max_pkt_size: int,
     objcopy_bin: str,
     timeout: int,
 ) -> list[StageResult]:
@@ -281,11 +290,13 @@ def run_k2_elf_equivalence(
             )
         ]
 
-    for name, path in (
-        ("input_k2_root", Path(k2_root)),
-        ("input_k2_map", Path(k2_map)),
-        ("input_k2_desc", Path(k2_desc)),
-    ):
+    required_paths = [("input_k2_root", Path(k2_root))]
+    if k2_map:
+        required_paths.append(("input_k2_map", Path(k2_map)))
+    if k2_desc:
+        required_paths.append(("input_k2_desc", Path(k2_desc)))
+
+    for name, path in required_paths:
         if not path.exists():
             stages.append(StageResult(name=name, result=FAIL, reason="file_not_found"))
 
@@ -296,6 +307,24 @@ def run_k2_elf_equivalence(
         tmp_path = Path(tmp)
         old_insns = tmp_path / "old.ins"
         new_insns = tmp_path / "new.ins"
+        map_path = Path(k2_map) if k2_map else tmp_path / "empty.maps"
+        desc_path = Path(k2_desc) if k2_desc else tmp_path / "generated.desc"
+        if not k2_map:
+            map_path.write_text("")
+        if not k2_desc:
+            input_type = K2_INPUT_TYPES[k2_input_type]
+            desc_path.write_text(
+                f"{{ pgm_input_type = {input_type}, }}\n"
+                f"{{ max_pkt_sz = {k2_max_pkt_size}, }}\n"
+            )
+        if not k2_map or not k2_desc:
+            stages.append(
+                StageResult(
+                    name="k2_env",
+                    result=PASS,
+                    reason="generated_default_environment",
+                )
+            )
         stages.append(
             run_objcopy_dump_section(
                 "extract_old",
@@ -323,8 +352,8 @@ def run_k2_elf_equivalence(
                 k2_root,
                 old_insns,
                 new_insns,
-                Path(k2_map),
-                Path(k2_desc),
+                map_path,
+                desc_path,
                 timeout,
             )
             stage.name = "equivalence"
@@ -470,6 +499,8 @@ def check(args: argparse.Namespace) -> int:
                     args.k2_root,
                     args.k2_map,
                     args.k2_desc,
+                    args.k2_input_type,
+                    args.k2_max_pkt_size,
                     args.objcopy_bin,
                     args.timeout,
                 )
@@ -536,8 +567,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     check_parser.add_argument("--k2-equiv", default="k2_ebpf_equiv")
     check_parser.add_argument("--k2-root")
-    check_parser.add_argument("--k2-map")
-    check_parser.add_argument("--k2-desc")
+    check_parser.add_argument(
+        "--k2-map",
+        help="K2 map metadata file; omitted means generate an empty map environment",
+    )
+    check_parser.add_argument(
+        "--k2-desc",
+        help="K2 program description file; omitted means generate one from --k2-input-type and --k2-max-pkt-size",
+    )
+    check_parser.add_argument(
+        "--k2-input-type",
+        choices=sorted(K2_INPUT_TYPES),
+        default="constant",
+        help="generated K2 desc input type when --k2-desc is omitted",
+    )
+    check_parser.add_argument(
+        "--k2-max-pkt-size",
+        type=int,
+        default=0,
+        help="generated K2 desc max packet size when --k2-desc is omitted",
+    )
     check_parser.add_argument(
         "--objcopy-bin",
         default="auto",
@@ -563,14 +612,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "check" and args.equiv_backend == "external" and not args.equiv_command:
         parser.error("--equiv-backend external requires --equiv-command")
     if args.command == "check" and args.equiv_backend == "k2":
-        missing = [
-            name
-            for name in ("k2_root", "k2_map", "k2_desc")
-            if not getattr(args, name)
-        ]
-        if missing:
-            formatted = ", ".join("--" + name.replace("_", "-") for name in missing)
-            parser.error(f"--equiv-backend k2 requires {formatted}")
+        if not args.k2_root:
+            parser.error("--equiv-backend k2 requires --k2-root")
+        if args.k2_max_pkt_size < 0:
+            parser.error("--k2-max-pkt-size must be non-negative")
     return args.func(args)
 
 

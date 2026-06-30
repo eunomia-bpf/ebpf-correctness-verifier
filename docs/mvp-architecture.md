@@ -204,6 +204,7 @@ rule learning third
    through the same `make test` entrypoint used locally.
 6. In progress: add real object fixtures and mutation tests beyond the minimal
    clang-produced return-value smoke.
-7. Add automatic map/desc/BTF/CO-RE environment extraction for K2.
+7. In progress: add K2 environment handling. A no-map constant-input default is
+   generated automatically; map/desc/BTF/CO-RE extraction remains.
 8. Add optional kernel verifier load gate and `BPF_PROG_RUN` replay.
 9. Add agent-facing JSON feedback.

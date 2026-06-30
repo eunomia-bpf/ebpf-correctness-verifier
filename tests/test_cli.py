@@ -174,15 +174,11 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result["result"], "FAIL")
             self.assertEqual(result["stages"][-1]["reason"], "external_equivalence_fail")
 
-    def test_k2_equivalence_backend_passes_identical_extracted_sections(self) -> None:
+    def test_k2_equivalence_backend_generates_default_environment(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             old = tmp_path / "old.o"
             old.write_bytes(b"old-elf")
-            maps = tmp_path / "empty.maps"
-            desc = tmp_path / "constant.desc"
-            maps.write_text("")
-            desc.write_text("{ pgm_input_type = 0, }\n{ max_pkt_sz = 0, }\n")
             prevail = make_executable(
                 tmp_path / "prevail",
                 """\
@@ -211,9 +207,14 @@ class CliTests(unittest.TestCase):
                   case "$1" in
                     --old) shift; old="$1" ;;
                     --new) shift; new="$1" ;;
+                    --map) shift; map="$1" ;;
+                    --desc) shift; desc="$1" ;;
                   esac
                   shift
                 done
+                [ ! -s "$map" ] || exit 2
+                grep -q "pgm_input_type = 0" "$desc" || exit 2
+                grep -q "max_pkt_sz = 0" "$desc" || exit 2
                 cmp -s "$old" "$new"
                 """,
             )
@@ -233,10 +234,6 @@ class CliTests(unittest.TestCase):
                     str(k2_equiv),
                     "--k2-root",
                     str(tmp_path),
-                    "--k2-map",
-                    str(maps),
-                    "--k2-desc",
-                    str(desc),
                     "--objcopy-bin",
                     str(objcopy),
                 ]
@@ -245,6 +242,10 @@ class CliTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
             result = json.loads(completed.stdout)
             self.assertEqual(result["result"], "PASS")
+            self.assertIn(
+                ("k2_env", "generated_default_environment"),
+                [(stage["name"], stage["reason"]) for stage in result["stages"]],
+            )
             self.assertEqual(result["stages"][-1]["reason"], "k2_equivalence_pass")
 
     def test_k2_equivalence_backend_fails_different_extracted_sections(self) -> None:

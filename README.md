@@ -81,9 +81,7 @@ PYTHONPATH=src python3 -m ebpf_tv check old.bpf.o new.bpf.o \
   --prevail-bin /path/to/prevail \
   --equiv-backend k2 \
   --k2-equiv build/k2_ebpf_equiv \
-  --k2-root third_party/k2-superopt \
-  --k2-map program.maps \
-  --k2-desc program.desc
+  --k2-root third_party/k2-superopt
 ```
 
 The CLI returns JSON by default:
@@ -142,7 +140,8 @@ objects pass, non-identical objects return `UNKNOWN` unless an external
 equivalence backend is configured. The vendored K2 backend can be selected with
 `--equiv-backend k2`; `ebpf-tv` extracts the requested ELF section with
 `llvm-objcopy`/`objcopy`, then calls the K2 raw-instruction checker with
-user-supplied `.maps` and `.desc` metadata.
+generated no-map constant-input metadata or user-supplied `.maps` and `.desc`
+metadata.
 
 ## Documents
 
