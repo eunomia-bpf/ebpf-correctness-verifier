@@ -34,31 +34,27 @@ clone_or_update_prevail() {
   fi
 }
 
-patch_prevail_cmake() {
+patch_prevail_cli_version() {
   python3 - "$PREVAIL_DIR" <<'PY'
 from pathlib import Path
 import sys
 
 root = Path(sys.argv[1])
-path = root / "CMakeLists.txt"
+path = root / "src" / "main.cpp"
 text = path.read_text()
-fixed = r'target_compile_definitions(prevail-cli PRIVATE PREVAIL_VERSION_STRING=\\\"${prevail_VERSION_STRING}\\\")'
-variants = [
-    'target_compile_definitions(prevail-cli PRIVATE PREVAIL_VERSION_STRING="${prevail_VERSION_STRING}")',
-    r'target_compile_definitions(prevail-cli PRIVATE PREVAIL_VERSION_STRING=\"${prevail_VERSION_STRING}\")',
-]
+original = '    app.set_version_flag("--version", PREVAIL_VERSION_STRING);'
+fixed = '    app.set_version_flag("--version", "prevail-smoke");'
 
 if fixed in text:
-    print(f"PREVAIL CMake compatibility patch already present: {path}")
+    print(f"PREVAIL CLI version compatibility patch already present: {path}")
     raise SystemExit(0)
 
-for variant in variants:
-    if variant in text:
-        path.write_text(text.replace(variant, fixed))
-        print(f"Applied PREVAIL CMake compatibility patch: {path}")
-        raise SystemExit(0)
+if original in text:
+    path.write_text(text.replace(original, fixed))
+    print(f"Applied PREVAIL CLI version compatibility patch: {path}")
+    raise SystemExit(0)
 
-raise SystemExit(f"Could not find PREVAIL_VERSION_STRING definition in {path}")
+raise SystemExit(f"Could not find PREVAIL_VERSION_STRING usage in {path}")
 PY
 }
 
@@ -80,7 +76,7 @@ run_prevail_smoke() {
 
 clone_or_update_prevail
 git -C "$PREVAIL_DIR" submodule update --init --recursive
-patch_prevail_cmake
+patch_prevail_cli_version
 
 cmake -S "$PREVAIL_DIR" -B "$PREVAIL_BUILD_DIR" -DCMAKE_BUILD_TYPE=Release
 cmake --build "$PREVAIL_BUILD_DIR" --target prevail-cli run_yaml -j "$JOBS"

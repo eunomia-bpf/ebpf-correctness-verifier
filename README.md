@@ -90,8 +90,8 @@ Run the optional real PREVAIL smoke against a pinned upstream checkout:
 make test-prevail-smoke
 ```
 
-This clones `vbpf/prevail` outside the tracked source tree, applies the small
-`PREVAIL_VERSION_STRING` CMake compatibility patch needed by current compilers,
+This clones `vbpf/prevail` outside the tracked source tree, applies a small
+`PREVAIL_VERSION_STRING` CLI compatibility patch needed by current compilers,
 builds `prevail` and `run_yaml`, then runs YAML and object smoke tests. It is
 kept out of the default `make test` gate because it depends on network access
 and upstream build behavior.

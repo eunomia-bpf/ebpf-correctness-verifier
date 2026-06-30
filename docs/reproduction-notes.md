@@ -38,15 +38,18 @@ cmake --build build -j$(nproc)
 Result:
 
 - `libprevail.a`, `bin/tests`, and `bin/run_yaml` built successfully.
-- `prevail-cli` needed a local CMake quoting patch for
-  `PREVAIL_VERSION_STRING` on this host.
+- `prevail-cli` needed a local compatibility patch for
+  `PREVAIL_VERSION_STRING` expansion on current CMake/compiler combinations.
 
 Compatibility patch used by `make test-prevail-smoke`:
 
 ```diff
--target_compile_definitions(prevail-cli PRIVATE PREVAIL_VERSION_STRING="${prevail_VERSION_STRING}")
-+target_compile_definitions(prevail-cli PRIVATE PREVAIL_VERSION_STRING=\\\"${prevail_VERSION_STRING}\\\")
+-    app.set_version_flag("--version", PREVAIL_VERSION_STRING);
++    app.set_version_flag("--version", "prevail-smoke");
 ```
+
+This only affects the smoke-built CLI's `--version` output; it does not change
+the verifier library or analysis behavior.
 
 Representative runs:
 

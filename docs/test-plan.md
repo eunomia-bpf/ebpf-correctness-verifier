@@ -25,7 +25,7 @@ The optional PREVAIL gate is:
 make test-prevail-smoke
 ```
 
-It clones a pinned upstream PREVAIL checkout, applies the local CMake
+It clones a pinned upstream PREVAIL checkout, applies the local CLI
 compatibility patch documented in `docs/reproduction-notes.md`, builds
 `prevail` and `run_yaml`, and runs selected YAML and object smoke tests. It is
 available as a manual GitHub Actions workflow because it depends on network
