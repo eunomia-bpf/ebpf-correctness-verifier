@@ -149,6 +149,7 @@ metadata.
 - [Reuse matrix](docs/reuse-matrix.md)
 - [MVP architecture](docs/mvp-architecture.md)
 - [Backend contract](docs/backend-contract.md)
+- [Test plan](docs/test-plan.md)
 - [Reproduction notes](docs/reproduction-notes.md)
 
 ## CI
