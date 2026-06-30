@@ -157,8 +157,9 @@ GitHub Actions runs `make test` on Ubuntu 24.04 with system `libz3-dev`,
 `clang`, `llvm`, and CMake. The CI suite covers the Python frontend, K2
 instruction semantics, the K2 raw equivalence wrapper, and the `ebpf-tv check
 --equiv-backend k2` ELF-section integration smoke test. The integration fixture
-checks byte-identical objects, a non-identical equivalent rewrite
-(`r0 = 1` versus `r0 = 0; r0 += 1`), and a return-value counterexample.
+checks byte-identical objects, non-identical equivalent rewrites
+(`r0 = 1` versus `r0 = 0; r0 += 1`, and direct register return versus
+stack store/load), and a return-value counterexample.
 
 ## Status
 

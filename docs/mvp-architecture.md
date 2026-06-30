@@ -203,8 +203,8 @@ rule learning third
 5. Done: run Python, K2, and ELF-section integration tests in GitHub Actions
    through the same `make test` entrypoint used locally.
 6. In progress: add real object fixtures and mutation tests. CI now covers a
-   clang-produced object, a non-identical equivalent section rewrite, and a
-   return-value counterexample; broader helper/map/packet fixtures remain.
+   clang-produced object, ALU and stack-memory equivalent section rewrites, and
+   a return-value counterexample; broader helper/map/packet fixtures remain.
 7. In progress: add K2 environment handling. A no-map constant-input default is
    generated automatically; map/desc/BTF/CO-RE extraction remains.
 8. Add optional kernel verifier load gate and `BPF_PROG_RUN` replay.

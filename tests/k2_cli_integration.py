@@ -14,7 +14,10 @@ from pathlib import Path
 
 BPF_ALU64_ADD_K = 0x07
 BPF_ALU64_MOV_K = 0xB7
+BPF_ALU_MOV_X = 0xBC
 BPF_EXIT = 0x95
+BPF_LDX_MEM_W = 0x61
+BPF_STX_MEM_W = 0x63
 
 
 def make_executable(path: Path, content: str) -> Path:
@@ -41,6 +44,18 @@ def return_one_via_add() -> bytes:
     return (
         raw_insn(BPF_ALU64_MOV_K, dst=0, imm=0)
         + raw_insn(BPF_ALU64_ADD_K, dst=0, imm=1)
+        + raw_insn(BPF_EXIT)
+    )
+
+
+def return_input_direct() -> bytes:
+    return raw_insn(BPF_ALU_MOV_X, dst=0, src=1) + raw_insn(BPF_EXIT)
+
+
+def return_input_via_stack() -> bytes:
+    return (
+        raw_insn(BPF_STX_MEM_W, dst=10, src=1, off=-4)
+        + raw_insn(BPF_LDX_MEM_W, dst=0, src=10, off=-4)
         + raw_insn(BPF_EXIT)
     )
 
@@ -141,8 +156,12 @@ def main(argv: list[str]) -> int:
         ret1_o = tmp_path / "ret1.o"
         ret1_raw = tmp_path / "ret1.ins"
         ret1_add_raw = tmp_path / "ret1-add.ins"
+        direct_raw = tmp_path / "direct.ins"
+        stack_raw = tmp_path / "stack.ins"
         ret1_patched_o = tmp_path / "ret1-patched.o"
         ret1_add_patched_o = tmp_path / "ret1-add-patched.o"
+        direct_patched_o = tmp_path / "direct-patched.o"
+        stack_patched_o = tmp_path / "stack-patched.o"
         prevail = make_executable(
             tmp_path / "prevail",
             """\
@@ -166,8 +185,12 @@ def main(argv: list[str]) -> int:
 
         ret1_raw.write_bytes(return_constant(1))
         ret1_add_raw.write_bytes(return_one_via_add())
+        direct_raw.write_bytes(return_input_direct())
+        stack_raw.write_bytes(return_input_via_stack())
         update_section(objcopy, ret1_o, ret1_raw, ret1_patched_o)
         update_section(objcopy, ret1_o, ret1_add_raw, ret1_add_patched_o)
+        update_section(objcopy, ret1_o, direct_raw, direct_patched_o)
+        update_section(objcopy, ret1_o, stack_raw, stack_patched_o)
 
         same = run_check(repo_root, ret0_o, ret0_o, prevail, k2_equiv, k2_root)
         assert same.returncode == 0, (same.stdout, same.stderr)
@@ -188,6 +211,23 @@ def main(argv: list[str]) -> int:
         assert rewrite_payload["result"] == "PASS", rewrite_payload
         assert rewrite_payload["stages"][-1]["reason"] == "k2_equivalence_pass", rewrite_payload
         assert rewrite_payload["stages"][-1]["exit_code"] == 0, rewrite_payload
+
+        stack_rewrite = run_check(
+            repo_root,
+            direct_patched_o,
+            stack_patched_o,
+            prevail,
+            k2_equiv,
+            k2_root,
+        )
+        assert stack_rewrite.returncode == 0, (
+            stack_rewrite.stdout,
+            stack_rewrite.stderr,
+        )
+        stack_payload = json.loads(stack_rewrite.stdout)
+        assert stack_payload["result"] == "PASS", stack_payload
+        assert stack_payload["stages"][-1]["reason"] == "k2_equivalence_pass", stack_payload
+        assert stack_payload["stages"][-1]["exit_code"] == 0, stack_payload
 
         diff = run_check(repo_root, ret0_o, ret1_o, prevail, k2_equiv, k2_root)
         assert diff.returncode == 1, (diff.stdout, diff.stderr)

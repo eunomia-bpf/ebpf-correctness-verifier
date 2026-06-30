@@ -10,7 +10,10 @@ from pathlib import Path
 
 
 BPF_ALU64_MOV_K = 0xB7
+BPF_ALU_MOV_X = 0xBC
 BPF_EXIT = 0x95
+BPF_LDX_MEM_W = 0x61
+BPF_STX_MEM_W = 0x63
 
 
 def raw_insn(opcode: int, dst: int = 0, src: int = 0, off: int = 0, imm: int = 0) -> bytes:
@@ -20,6 +23,18 @@ def raw_insn(opcode: int, dst: int = 0, src: int = 0, off: int = 0, imm: int = 0
 
 def return_constant(value: int) -> bytes:
     return raw_insn(BPF_ALU64_MOV_K, dst=0, imm=value) + raw_insn(BPF_EXIT)
+
+
+def return_input_direct() -> bytes:
+    return raw_insn(BPF_ALU_MOV_X, dst=0, src=1) + raw_insn(BPF_EXIT)
+
+
+def return_input_via_stack() -> bytes:
+    return (
+        raw_insn(BPF_STX_MEM_W, dst=10, src=1, off=-4)
+        + raw_insn(BPF_LDX_MEM_W, dst=0, src=10, off=-4)
+        + raw_insn(BPF_EXIT)
+    )
 
 
 def run_case(
@@ -69,16 +84,24 @@ def main(argv: list[str]) -> int:
         ret0 = tmp_path / "ret0.ins"
         ret0_copy = tmp_path / "ret0-copy.ins"
         ret1 = tmp_path / "ret1.ins"
+        direct = tmp_path / "direct.ins"
+        stack = tmp_path / "stack.ins"
         maps = tmp_path / "empty.maps"
         desc = tmp_path / "constant.desc"
 
         ret0.write_bytes(return_constant(0))
         ret0_copy.write_bytes(return_constant(0))
         ret1.write_bytes(return_constant(1))
+        direct.write_bytes(return_input_direct())
+        stack.write_bytes(return_input_via_stack())
         maps.write_text("")
         desc.write_text("{ pgm_input_type = 0, }\n{ max_pkt_sz = 0, }\n")
 
         code, payload, stderr = run_case(tool, k2_root, ret0, ret0_copy, maps, desc)
+        assert code == 0, (code, payload, stderr)
+        assert payload["result"] == "PASS", payload
+
+        code, payload, stderr = run_case(tool, k2_root, direct, stack, maps, desc)
         assert code == 0, (code, payload, stderr)
         assert payload["result"] == "PASS", payload
 
