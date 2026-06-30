@@ -12,10 +12,37 @@ import textwrap
 from pathlib import Path
 
 
+BPF_ALU64_ADD_K = 0x07
+BPF_ALU64_MOV_K = 0xB7
+BPF_EXIT = 0x95
+
+
 def make_executable(path: Path, content: str) -> Path:
     path.write_text(textwrap.dedent(content), encoding="utf-8")
     path.chmod(path.stat().st_mode | stat.S_IEXEC)
     return path
+
+
+def raw_insn(opcode: int, dst: int = 0, src: int = 0, off: int = 0, imm: int = 0) -> bytes:
+    regs = (dst & 0x0F) | ((src & 0x0F) << 4)
+    return (
+        opcode.to_bytes(1, "little")
+        + regs.to_bytes(1, "little")
+        + off.to_bytes(2, "little", signed=True)
+        + imm.to_bytes(4, "little", signed=True)
+    )
+
+
+def return_constant(value: int) -> bytes:
+    return raw_insn(BPF_ALU64_MOV_K, dst=0, imm=value) + raw_insn(BPF_EXIT)
+
+
+def return_one_via_add() -> bytes:
+    return (
+        raw_insn(BPF_ALU64_MOV_K, dst=0, imm=0)
+        + raw_insn(BPF_ALU64_ADD_K, dst=0, imm=1)
+        + raw_insn(BPF_EXIT)
+    )
 
 
 def compile_bpf(clang: str, source: Path, output: Path) -> bool:
@@ -40,6 +67,16 @@ def compile_bpf(clang: str, source: Path, output: Path) -> bool:
         print(completed.stderr)
         return False
     return True
+
+
+def update_section(objcopy: str, base: Path, section_data: Path, output: Path) -> None:
+    completed = subprocess.run(
+        [objcopy, f"--update-section=xdp={section_data}", str(base), str(output)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
 
 
 def run_check(
@@ -102,6 +139,10 @@ def main(argv: list[str]) -> int:
         ret1_c = tmp_path / "ret1.c"
         ret0_o = tmp_path / "ret0.o"
         ret1_o = tmp_path / "ret1.o"
+        ret1_raw = tmp_path / "ret1.ins"
+        ret1_add_raw = tmp_path / "ret1-add.ins"
+        ret1_patched_o = tmp_path / "ret1-patched.o"
+        ret1_add_patched_o = tmp_path / "ret1-add-patched.o"
         prevail = make_executable(
             tmp_path / "prevail",
             """\
@@ -123,11 +164,30 @@ def main(argv: list[str]) -> int:
         if not compile_bpf(clang, ret1_c, ret1_o):
             return 0
 
+        ret1_raw.write_bytes(return_constant(1))
+        ret1_add_raw.write_bytes(return_one_via_add())
+        update_section(objcopy, ret1_o, ret1_raw, ret1_patched_o)
+        update_section(objcopy, ret1_o, ret1_add_raw, ret1_add_patched_o)
+
         same = run_check(repo_root, ret0_o, ret0_o, prevail, k2_equiv, k2_root)
         assert same.returncode == 0, (same.stdout, same.stderr)
         same_payload = json.loads(same.stdout)
         assert same_payload["result"] == "PASS", same_payload
         assert same_payload["stages"][-1]["reason"] == "k2_equivalence_pass", same_payload
+
+        rewrite = run_check(
+            repo_root,
+            ret1_patched_o,
+            ret1_add_patched_o,
+            prevail,
+            k2_equiv,
+            k2_root,
+        )
+        assert rewrite.returncode == 0, (rewrite.stdout, rewrite.stderr)
+        rewrite_payload = json.loads(rewrite.stdout)
+        assert rewrite_payload["result"] == "PASS", rewrite_payload
+        assert rewrite_payload["stages"][-1]["reason"] == "k2_equivalence_pass", rewrite_payload
+        assert rewrite_payload["stages"][-1]["exit_code"] == 0, rewrite_payload
 
         diff = run_check(repo_root, ret0_o, ret1_o, prevail, k2_equiv, k2_root)
         assert diff.returncode == 1, (diff.stdout, diff.stderr)

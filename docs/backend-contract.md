@@ -120,7 +120,7 @@ Current scope:
   or map modeling
 - in-process system Z3, not K2's old z3server path
 - smoke-tested on generated raw eBPF programs and clang-produced ELF objects
-  for both PASS and FAIL
+  for byte-identical PASS, non-identical equivalent PASS, and semantic FAIL
 
 Known gaps:
 
