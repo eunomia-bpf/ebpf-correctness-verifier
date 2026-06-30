@@ -1,6 +1,6 @@
 .PHONY: test test-python test-k2-smoke
 
-test: test-python
+test: test-python test-k2-smoke
 
 test-python:
 	PYTHONPATH=src python3 -m unittest discover -s tests

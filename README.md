@@ -27,7 +27,13 @@ observable behavior of the original program.
 
 ## Quick Start
 
-Run the Python CLI tests:
+Run the full local test suite:
+
+```bash
+make test
+```
+
+Run only the Python CLI tests:
 
 ```bash
 make test-python
@@ -145,6 +151,13 @@ user-supplied `.maps` and `.desc` metadata.
 - [MVP architecture](docs/mvp-architecture.md)
 - [Backend contract](docs/backend-contract.md)
 - [Reproduction notes](docs/reproduction-notes.md)
+
+## CI
+
+GitHub Actions runs `make test` on Ubuntu 24.04 with system `libz3-dev`,
+`clang`, `llvm`, and CMake. The CI suite covers the Python frontend, K2
+instruction semantics, the K2 raw equivalence wrapper, and the `ebpf-tv check
+--equiv-backend k2` ELF-section integration smoke test.
 
 ## Status
 

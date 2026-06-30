@@ -200,8 +200,10 @@ rule learning third
 3. Done: add a local CLI that emits JSON for `PASS`, `FAIL`, and `UNKNOWN`.
 4. Done for the first supported slice: extract a K2-derived old/new equivalence
    command and wire it into `ebpf-tv check --equiv-backend k2`.
-5. In progress: add real object fixtures and mutation tests beyond the minimal
+5. Done: run Python, K2, and ELF-section integration tests in GitHub Actions
+   through the same `make test` entrypoint used locally.
+6. In progress: add real object fixtures and mutation tests beyond the minimal
    clang-produced return-value smoke.
-6. Add automatic map/desc/BTF/CO-RE environment extraction for K2.
-7. Add optional kernel verifier load gate and `BPF_PROG_RUN` replay.
-8. Add agent-facing JSON feedback.
+7. Add automatic map/desc/BTF/CO-RE environment extraction for K2.
+8. Add optional kernel verifier load gate and `BPF_PROG_RUN` replay.
+9. Add agent-facing JSON feedback.
