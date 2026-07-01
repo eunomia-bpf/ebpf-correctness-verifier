@@ -176,6 +176,72 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result["result"], "FAIL")
             self.assertEqual(result["stages"][-1]["reason"], "external_equivalence_fail")
 
+    def test_external_equivalence_receives_old_new_section_placeholders(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            old = tmp_path / "old.o"
+            new = tmp_path / "new.o"
+            old.write_bytes(b"old")
+            new.write_bytes(b"new")
+            seen = tmp_path / "seen.txt"
+            prevail = make_executable(
+                tmp_path / "prevail",
+                """\
+                #!/usr/bin/env sh
+                echo "PASS: $2/func"
+                """,
+            )
+            equiv = make_executable(
+                tmp_path / "equiv",
+                f"""\
+                #!/usr/bin/env sh
+                printf '%s %s %s' "$1" "$2" "$3" > "{seen}"
+                exit 0
+                """,
+            )
+
+            completed = run_cli(
+                [
+                    "check",
+                    str(old),
+                    str(new),
+                    "--old-section",
+                    "xdp",
+                    "--new-section",
+                    "xdp.frags",
+                    "--prevail-bin",
+                    str(prevail),
+                    "--equiv-backend",
+                    "external",
+                    "--equiv-command",
+                    str(equiv),
+                    "{section}",
+                    "{old_section}",
+                    "{new_section}",
+                ]
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(seen.read_text(), "xdp xdp xdp.frags")
+
+    def test_section_required_unless_old_and_new_sections_are_provided(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            completed = run_cli(
+                [
+                    "check",
+                    str(Path(tmp) / "old.o"),
+                    str(Path(tmp) / "new.o"),
+                    "--old-section",
+                    "xdp",
+                ]
+            )
+
+            self.assertEqual(completed.returncode, 2)
+            self.assertIn(
+                "--section is required unless both --old-section and --new-section are provided",
+                completed.stderr,
+            )
+
     def test_k2_equivalence_backend_generates_default_environment(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -317,6 +383,192 @@ class CliTests(unittest.TestCase):
             result = json.loads(completed.stdout)
             self.assertEqual(result["result"], "PASS")
             self.assertEqual(result["stages"][-1]["reason"], "k2_equivalence_pass")
+
+    def test_k2_equivalence_backend_rejects_section_program_type_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            old = tmp_path / "old.o"
+            new = tmp_path / "new.o"
+            old.write_bytes(b"old-elf")
+            new.write_bytes(b"new-elf")
+            marker = tmp_path / "k2-invoked"
+            prevail = make_executable(
+                tmp_path / "prevail",
+                """\
+                #!/usr/bin/env sh
+                echo "PASS: $2/func"
+                """,
+            )
+            k2_equiv = make_executable(
+                tmp_path / "k2_equiv",
+                f"""\
+                #!/usr/bin/env sh
+                touch "{marker}"
+                exit 0
+                """,
+            )
+
+            completed = run_cli(
+                [
+                    "check",
+                    str(old),
+                    str(new),
+                    "--old-section",
+                    "xdp",
+                    "--new-section",
+                    "tracepoint/syscalls/sys_enter_openat",
+                    "--prevail-bin",
+                    str(prevail),
+                    "--equiv-backend",
+                    "k2",
+                    "--k2-equiv",
+                    str(k2_equiv),
+                    "--k2-root",
+                    str(tmp_path),
+                ]
+            )
+
+            self.assertEqual(completed.returncode, 1)
+            self.assertFalse(marker.exists())
+            result = json.loads(completed.stdout)
+            self.assertEqual(result["result"], "FAIL")
+            self.assertIn(
+                ("k2_program_type", "program_type_mismatch"),
+                [(stage["name"], stage["reason"]) for stage in result["stages"]],
+            )
+
+    def test_k2_equivalence_backend_accepts_compatible_section_overrides(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            old = tmp_path / "old.o"
+            new = tmp_path / "new.o"
+            old.write_bytes(b"old-elf")
+            new.write_bytes(b"new-elf")
+            prevail = make_executable(
+                tmp_path / "prevail",
+                """\
+                #!/usr/bin/env sh
+                echo "PASS: $2/func"
+                """,
+            )
+            objcopy = make_executable(
+                tmp_path / "objcopy",
+                """\
+                #!/usr/bin/env sh
+                spec="${1#--dump-section=}"
+                section="${spec%%=*}"
+                out="${spec#*=}"
+                [ "$section" = "maps" ] && exit 1
+                case "$section:$2" in
+                  xdp:*old.o) printf section > "$out" ;;
+                  xdp.frags:*new.o) printf section > "$out" ;;
+                  *) exit 1 ;;
+                esac
+                """,
+            )
+            k2_equiv = make_executable(
+                tmp_path / "k2_equiv",
+                """\
+                #!/usr/bin/env sh
+                while [ "$#" -gt 0 ]; do
+                  case "$1" in
+                    --old) shift; old="$1" ;;
+                    --new) shift; new="$1" ;;
+                    --map) shift; map="$1" ;;
+                    --desc) shift; desc="$1" ;;
+                  esac
+                  shift
+                done
+                [ ! -s "$map" ] || exit 2
+                grep -q "pgm_input_type = 1" "$desc" || exit 2
+                grep -q "max_pkt_sz = 64" "$desc" || exit 2
+                cmp -s "$old" "$new"
+                """,
+            )
+
+            completed = run_cli(
+                [
+                    "check",
+                    str(old),
+                    str(new),
+                    "--old-section",
+                    "xdp",
+                    "--new-section",
+                    "xdp.frags",
+                    "--prevail-bin",
+                    str(prevail),
+                    "--equiv-backend",
+                    "k2",
+                    "--k2-equiv",
+                    str(k2_equiv),
+                    "--k2-root",
+                    str(tmp_path),
+                    "--objcopy-bin",
+                    str(objcopy),
+                ]
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            result = json.loads(completed.stdout)
+            self.assertEqual(result["result"], "PASS")
+            self.assertIn(
+                ("k2_program_type", "program_type_compatible"),
+                [(stage["name"], stage["reason"]) for stage in result["stages"]],
+            )
+            self.assertEqual(result["stages"][-1]["reason"], "k2_equivalence_pass")
+
+    def test_k2_equivalence_backend_returns_unknown_for_unclassified_section_override(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            old = tmp_path / "old.o"
+            new = tmp_path / "new.o"
+            old.write_bytes(b"old-elf")
+            new.write_bytes(b"new-elf")
+            marker = tmp_path / "k2-invoked"
+            prevail = make_executable(
+                tmp_path / "prevail",
+                """\
+                #!/usr/bin/env sh
+                echo "PASS: $2/func"
+                """,
+            )
+            k2_equiv = make_executable(
+                tmp_path / "k2_equiv",
+                f"""\
+                #!/usr/bin/env sh
+                touch "{marker}"
+                exit 0
+                """,
+            )
+
+            completed = run_cli(
+                [
+                    "check",
+                    str(old),
+                    str(new),
+                    "--old-section",
+                    "custom/old",
+                    "--new-section",
+                    "custom/new",
+                    "--prevail-bin",
+                    str(prevail),
+                    "--equiv-backend",
+                    "k2",
+                    "--k2-equiv",
+                    str(k2_equiv),
+                    "--k2-root",
+                    str(tmp_path),
+                ]
+            )
+
+            self.assertEqual(completed.returncode, 1)
+            self.assertFalse(marker.exists())
+            result = json.loads(completed.stdout)
+            self.assertEqual(result["result"], "UNKNOWN")
+            self.assertIn(
+                ("k2_program_type", "program_type_unknown"),
+                [(stage["name"], stage["reason"]) for stage in result["stages"]],
+            )
 
     def test_k2_equivalence_backend_generates_packet_environment(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -896,6 +1148,14 @@ class CliTests(unittest.TestCase):
         )
         self.assertIn(
             "legacy SEC(\"maps\") struct bpf_map_def extraction",
+            result["equivalence_backends"]["k2"]["features"],
+        )
+        self.assertIn(
+            "old/new ELF section overrides",
+            result["equivalence_backends"]["k2"]["features"],
+        )
+        self.assertIn(
+            "section-inferred program-type compatibility precheck",
             result["equivalence_backends"]["k2"]["features"],
         )
         self.assertIn(

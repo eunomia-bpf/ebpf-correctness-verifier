@@ -131,6 +131,12 @@ Current scope:
   `objcopy`
 - `k2_ebpf_equiv` checks raw K2 `.ins` bytecode inputs
 - one shared K2 environment for old/new
+- `--old-section` and `--new-section` can override the shared `--section`
+  value for transformations that move or rename ELF sections
+- known section-prefix program types are checked before K2 is invoked; for
+  example, XDP versus tracepoint returns `FAIL` with `program_type_mismatch`
+  when generated `.desc` metadata would otherwise be used, unclassified
+  different sections return `UNKNOWN` instead of guessing a shared environment
 - automatic K2 `.maps` generation from matching legacy ELF `maps` sections
   containing `struct bpf_map_def` records when `--k2-map` is omitted
 - generated empty-map environment when no legacy `maps` section exists and
@@ -157,9 +163,9 @@ Current scope:
 - raw-backend smoke coverage for explicit map metadata and packet-input
   metadata, including supported PASS and FAIL cases
 - ELF-section frontend coverage for explicit map metadata, automatic legacy map
-  extraction, explicit old/new description matching and mismatch, section-inferred
-  packet metadata, and packet-input metadata through `ebpf-tv check
-  --equiv-backend k2`
+  extraction, explicit old/new description matching and mismatch, old/new section
+  overrides, section-inferred program-type mismatch, section-inferred packet
+  metadata, and packet-input metadata through `ebpf-tv check --equiv-backend k2`
 
 Known gaps:
 
@@ -168,6 +174,6 @@ Known gaps:
   overridden
 - no modern BTF `.maps` extraction or CO-RE relocation modeling yet
 - no automatic program-type/context compatibility extraction from loader or BTF
-  metadata yet
+  metadata beyond the small section-prefix table yet
 - complex K2 fixtures can still hit old unsupported pointer-model paths and must
   return `UNKNOWN`

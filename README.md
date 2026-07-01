@@ -197,7 +197,10 @@ user-supplied `.maps` and `.desc` metadata. The current section inference is
 deliberately small: XDP sections default to K2 packet input with a bounded
 64-byte packet size, and unknown sections default to constant input. When users
 provide separate `--k2-old-desc` and `--k2-new-desc` metadata files, `ebpf-tv`
-checks that the explicit program descriptions match before invoking K2.
+checks that the explicit program descriptions match before invoking K2. When
+`--old-section` and `--new-section` differ, `ebpf-tv` also checks compatible
+program types for known section prefixes such as XDP and tracepoints before
+extracting bytecode.
 
 ## Documents
 

@@ -33,6 +33,13 @@ K2_INPUT_TYPES = {
 }
 K2_PACKET_INPUT_TYPES = {"pkt", "pkt-ptrs", "skb"}
 K2_XDP_SECTION_PREFIXES = ("xdp/", "xdp.")
+K2_SECTION_PROGRAM_TYPE_PREFIXES = {
+    "xdp": ("xdp", "xdp/", "xdp."),
+    "tracepoint": ("tracepoint/", "tp/"),
+    "sched_cls": ("classifier", "tc", "tc/", "sched_cls", "sched_cls/"),
+    "kprobe": ("kprobe/", "kretprobe/"),
+    "uprobe": ("uprobe/", "uretprobe/"),
+}
 
 
 @dataclass
@@ -121,6 +128,8 @@ def build_capabilities() -> dict[str, object]:
                 "features": [
                     "raw .ins equivalence through k2_ebpf_equiv",
                     "ELF section extraction through llvm-objcopy or objcopy",
+                    "old/new ELF section overrides",
+                    "section-inferred program-type compatibility precheck",
                     "legacy SEC(\"maps\") struct bpf_map_def extraction",
                     "explicit K2 .maps and .desc overrides",
                     "explicit old/new K2 .desc compatibility precheck",
@@ -140,6 +149,7 @@ def build_capabilities() -> dict[str, object]:
                 ],
                 "tested_negative_cases": [
                     "different return constants",
+                    "section-inferred program type mismatch",
                     "map update/lookup counterexample",
                     "legacy map metadata mismatch",
                     "program description metadata mismatch",
@@ -150,7 +160,7 @@ def build_capabilities() -> dict[str, object]:
         "known_gaps": [
             "BTF .maps extraction",
             "CO-RE relocation modeling",
-            "automatic loader-derived program/context metadata extraction",
+            "automatic loader/BTF program/context metadata extraction beyond section-prefix inference",
             "kernel verifier load gate",
             "BPF_PROG_RUN differential execution",
             "helper side effects beyond current K2 fixtures",
@@ -246,6 +256,57 @@ def infer_k2_input_type(section: str) -> str:
     return "constant"
 
 
+def infer_section_program_type(section: str) -> str:
+    normalized = section.lower()
+    for program_type, prefixes in K2_SECTION_PROGRAM_TYPE_PREFIXES.items():
+        for prefix in prefixes:
+            if normalized == prefix or (
+                prefix.endswith(("/", ".")) and normalized.startswith(prefix)
+            ):
+                return program_type
+    return "unknown"
+
+
+def compare_section_program_types(
+    old_section: str, new_section: str, require_known: bool
+) -> StageResult:
+    old_type = infer_section_program_type(old_section)
+    new_type = infer_section_program_type(new_section)
+    stdout = json.dumps(
+        {
+            "old_section": old_section,
+            "new_section": new_section,
+            "old_program_type": old_type,
+            "new_program_type": new_type,
+        },
+        sort_keys=True,
+    )
+    if (old_type == "unknown" or new_type == "unknown") and require_known:
+        return StageResult(
+            name="k2_program_type",
+            result=UNKNOWN,
+            reason="program_type_unknown",
+            stdout=stdout,
+        )
+    if old_type != new_type:
+        return StageResult(
+            name="k2_program_type",
+            result=FAIL,
+            reason="program_type_mismatch",
+            stdout=stdout,
+        )
+    return StageResult(
+        name="k2_program_type",
+        result=PASS,
+        reason=(
+            "program_type_compatible"
+            if old_type == new_type
+            else "program_type_not_inferred"
+        ),
+        stdout=stdout,
+    )
+
+
 def resolve_k2_desc_inputs(
     section: str,
     requested_input_type: str,
@@ -327,6 +388,8 @@ def run_external_equivalence(
     old: Path,
     new: Path,
     section: str,
+    old_section: str,
+    new_section: str,
     function: str | None,
     command_template: list[str],
     timeout: int,
@@ -335,6 +398,8 @@ def run_external_equivalence(
         "{old}": str(old),
         "{new}": str(new),
         "{section}": section,
+        "{old_section}": old_section,
+        "{new_section}": new_section,
         "{function}": function or "",
     }
     command = [replacements.get(part, part) for part in command_template]
@@ -525,7 +590,8 @@ def run_k2_equiv(
 def run_k2_elf_equivalence(
     old: Path,
     new: Path,
-    section: str,
+    old_section: str,
+    new_section: str,
     k2_equiv: str,
     k2_root: str,
     k2_map: str | None,
@@ -583,6 +649,14 @@ def run_k2_elf_equivalence(
             stages.append(compare_k2_desc_pair(Path(k2_old_desc), Path(k2_new_desc)))
             if combine(stages) != PASS:
                 return stages
+        if old_section != new_section:
+            stages.append(
+                compare_section_program_types(
+                    old_section, new_section, require_known=generated_desc
+                )
+            )
+            if combine(stages) != PASS:
+                return stages
         if not k2_map:
             old_maps_stage, old_maps = run_legacy_map_extract(
                 "k2_maps_old",
@@ -613,7 +687,7 @@ def run_k2_elf_equivalence(
             write_k2_maps(map_path, old_maps)
         if generated_desc:
             input_type_name, max_pkt_size = resolve_k2_desc_inputs(
-                section,
+                old_section,
                 k2_input_type,
                 k2_max_pkt_size,
             )
@@ -634,7 +708,7 @@ def run_k2_elf_equivalence(
             run_objcopy_dump_section(
                 "extract_old",
                 old,
-                section,
+                old_section,
                 old_insns,
                 objcopy_bin,
                 timeout,
@@ -644,7 +718,7 @@ def run_k2_elf_equivalence(
             run_objcopy_dump_section(
                 "extract_new",
                 new,
-                section,
+                new_section,
                 new_insns,
                 objcopy_bin,
                 timeout,
@@ -753,6 +827,9 @@ def run_k2_equiv_smoke(
 def check(args: argparse.Namespace) -> int:
     old = Path(args.old)
     new = Path(args.new)
+    old_section = args.old_section or args.section
+    new_section = args.new_section or args.section
+    section = args.section or old_section
     stages: list[StageResult] = []
 
     for label, obj in (("input_old", old), ("input_new", new)):
@@ -764,7 +841,7 @@ def check(args: argparse.Namespace) -> int:
             run_prevail(
                 "prevail_old",
                 old,
-                args.section,
+                old_section,
                 args.function,
                 args.prevail_bin,
                 args.timeout,
@@ -774,7 +851,7 @@ def check(args: argparse.Namespace) -> int:
             run_prevail(
                 "prevail_new",
                 new,
-                args.section,
+                new_section,
                 args.function,
                 args.prevail_bin,
                 args.timeout,
@@ -788,7 +865,9 @@ def check(args: argparse.Namespace) -> int:
                 run_external_equivalence(
                     old,
                     new,
-                    args.section,
+                    section,
+                    old_section,
+                    new_section,
                     args.function,
                     args.equiv_command,
                     args.timeout,
@@ -799,7 +878,8 @@ def check(args: argparse.Namespace) -> int:
                 run_k2_elf_equivalence(
                     old,
                     new,
-                    args.section,
+                    old_section,
+                    new_section,
                     args.k2_equiv,
                     args.k2_root,
                     args.k2_map,
@@ -857,7 +937,18 @@ def build_parser() -> argparse.ArgumentParser:
     check_parser = subparsers.add_parser("check", help="validate old/new objects")
     check_parser.add_argument("old")
     check_parser.add_argument("new")
-    check_parser.add_argument("--section", required=True)
+    check_parser.add_argument(
+        "--section",
+        help="ELF section to check in both objects unless --old-section/--new-section override it",
+    )
+    check_parser.add_argument(
+        "--old-section",
+        help="ELF section to check in the old object; defaults to --section",
+    )
+    check_parser.add_argument(
+        "--new-section",
+        help="ELF section to check in the new object; defaults to --section",
+    )
     check_parser.add_argument("--function")
     check_parser.add_argument("--prevail-bin", default="prevail")
     check_parser.add_argument(
@@ -870,7 +961,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--equiv-command",
         nargs=argparse.REMAINDER,
         default=[],
-        help="external equivalence command; supports {old}, {new}, {section}, {function}",
+        help=(
+            "external equivalence command; supports {old}, {new}, {section}, "
+            "{old_section}, {new_section}, {function}"
+        ),
     )
     check_parser.add_argument("--k2-equiv", default="k2_ebpf_equiv")
     check_parser.add_argument("--k2-root")
@@ -949,17 +1043,22 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.command == "check" and args.equiv_backend == "external" and not args.equiv_command:
-        parser.error("--equiv-backend external requires --equiv-command")
-    if args.command == "check" and args.equiv_backend == "k2":
-        if not args.k2_root:
-            parser.error("--equiv-backend k2 requires --k2-root")
-        if args.k2_max_pkt_size < 0:
-            parser.error("--k2-max-pkt-size must be non-negative")
-        if bool(args.k2_old_desc) != bool(args.k2_new_desc):
-            parser.error("--k2-old-desc and --k2-new-desc must be provided together")
-        if args.k2_desc and (args.k2_old_desc or args.k2_new_desc):
-            parser.error("--k2-desc cannot be combined with --k2-old-desc/--k2-new-desc")
+    if args.command == "check":
+        if not args.section and not (args.old_section and args.new_section):
+            parser.error(
+                "--section is required unless both --old-section and --new-section are provided"
+            )
+        if args.equiv_backend == "external" and not args.equiv_command:
+            parser.error("--equiv-backend external requires --equiv-command")
+        if args.equiv_backend == "k2":
+            if not args.k2_root:
+                parser.error("--equiv-backend k2 requires --k2-root")
+            if args.k2_max_pkt_size < 0:
+                parser.error("--k2-max-pkt-size must be non-negative")
+            if bool(args.k2_old_desc) != bool(args.k2_new_desc):
+                parser.error("--k2-old-desc and --k2-new-desc must be provided together")
+            if args.k2_desc and (args.k2_old_desc or args.k2_new_desc):
+                parser.error("--k2-desc cannot be combined with --k2-old-desc/--k2-new-desc")
     return args.func(args)
 
 

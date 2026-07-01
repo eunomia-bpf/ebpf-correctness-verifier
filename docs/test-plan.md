@@ -57,6 +57,7 @@ a separate job so the default local `make test` gate stays network-free.
 | K2 instruction semantics | vendored `k2_ebpf_inst_codegen_test` via CTest | selected K2 eBPF instruction, memory, map-helper, map-equivalence, and packet formulas still build and run against modern system Z3 | inherited K2 smoke cases |
 | Upstream Z3 release | `make test-k2-z3-release`, CI `upstream-z3` job | the vendored K2 wrapper builds and runs against the pinned official Z3 release, not only distro `libz3-dev` | sha256-verified Z3 4.16.0 binary release, K2 CTest suite, wrapper version JSON |
 | ELF adapter | `tests/k2_cli_integration.py` via CTest | `ebpf-tv` extracts ELF sections, generates default, section-inferred, auto-extracted legacy, or explicit K2 metadata, and invokes K2 through the single CLI | byte-identical pass, ALU rewrite pass, stack-memory rewrite pass, map update/lookup pass/fail with explicit map metadata, map rewrite pass with auto-extracted legacy map metadata, XDP packet-input inference, packet read pass/fail with explicit packet metadata, return-value fail |
+| Section metadata precheck | `tests/test_cli.py` | explicit old/new section overrides route PREVAIL/K2 to the right ELF sections and reject known incompatible program types before solving | external backend old/new section placeholders, compatible XDP section override pass, XDP-vs-tracepoint mismatch returns `FAIL`, unclassified section mismatch returns `UNKNOWN` before K2 is invoked |
 | K2 metadata precheck | `tests/test_cli.py` | explicit old/new K2 program descriptions are checked before equivalence solving | byte-identical `--k2-old-desc`/`--k2-new-desc` continues to K2, mismatch returns `FAIL` before K2 is invoked |
 | Public examples | `make test-example-k2-xdp` | documented CLI examples remain runnable through the same tested K2 backend | non-identical equivalent XDP objects with fake PREVAIL and K2 equivalence PASS |
 | CI | `.github/workflows/ci.yml` | fresh Ubuntu build installs dependencies and runs the same local gate | Python 3 packaging tools, clang/llvm, CMake, libz3-dev |
@@ -105,6 +106,8 @@ must remain stable across hosts and solver versions.
 The K2 equivalence path currently has CI coverage for:
 
 - `r0 = 0; exit` versus `r0 = 1; exit`
+- section-inferred XDP versus tracepoint program-type mismatch before K2 is
+  invoked
 - map update followed by lookup versus lookup-only
 - old/new legacy map metadata mismatch before K2 is invoked
 - old/new explicit K2 program-description metadata mismatch before K2 is invoked
@@ -143,7 +146,7 @@ The following are intentionally not claimed yet:
 - ringbuf/perf-event output sink tracking
 - atomicity-preservation structural checks
 - automatic program-type/context compatibility extraction from loader or BTF
-  metadata before equivalence
+  metadata beyond the small section-prefix table before equivalence
 - target-kernel verifier loading
 - `BPF_PROG_RUN` replay or differential execution
 - agent-facing counterexample minimization
