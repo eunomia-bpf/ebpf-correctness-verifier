@@ -28,3 +28,24 @@ jobs:
 
       - name: Run test suite
         run: make test
+
+  upstream-z3:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang \
+            cmake \
+            curl \
+            g++ \
+            llvm \
+            python3 \
+            unzip
+
+      - name: Run K2 smoke against pinned upstream Z3 release
+        run: make test-k2-z3-release

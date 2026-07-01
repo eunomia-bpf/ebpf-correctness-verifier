@@ -712,12 +712,24 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result["dependency_policy"]["k2"]["mode"], "vendored")
         self.assertEqual(result["dependency_policy"]["z3"]["mode"], "system")
         self.assertFalse(result["dependency_policy"]["z3"]["default_submodule"])
+        self.assertEqual(
+            result["dependency_policy"]["z3"]["upstream_release_smoke"],
+            "make test-k2-z3-release",
+        )
+        self.assertEqual(
+            result["dependency_policy"]["z3"]["upstream_release_version"],
+            "4.16.0",
+        )
         self.assertIn(
             "legacy SEC(\"maps\") struct bpf_map_def extraction",
             result["equivalence_backends"]["k2"]["features"],
         )
         self.assertIn(
             "XDP section prefix to packet-input desc inference",
+            result["equivalence_backends"]["k2"]["features"],
+        )
+        self.assertIn(
+            "K2/Z3 provenance reporting through k2_ebpf_equiv --version",
             result["equivalence_backends"]["k2"]["features"],
         )
         self.assertIn("BTF .maps extraction", result["known_gaps"])

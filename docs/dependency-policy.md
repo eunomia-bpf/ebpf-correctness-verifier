@@ -12,7 +12,7 @@ tools external when a stable binary interface is enough.
 | Dependency | Policy | Default path | Reason |
 | --- | --- | --- | --- |
 | K2 / `smartnic/superopt` | Vendored source | `third_party/k2-superopt` | This project modernizes and wraps K2 directly: root CMake, system-Z3 linkage, curated eBPF smoke tests, and `k2_ebpf_equiv`. |
-| Z3 | System package | `libz3-dev`, found by CMake | The project uses Z3 as a solver library, not as code to modify. System packages keep checkout and CI small while still testing modern Z3 integration. |
+| Z3 | System package plus pinned upstream-release smoke | `libz3-dev`, found by CMake; `make test-k2-z3-release` | The project uses Z3 as a solver library, not as code to modify. System packages keep checkout small, while the upstream-release smoke checks compatibility with the current pinned Z3 release without vendoring solver source. |
 | PREVAIL | External binary plus optional pinned smoke | `--prevail-bin`, `make test-prevail-smoke` | `ebpf-tv` consumes PREVAIL through its CLI contract. The default build should not require Boost/PREVAIL sources or PREVAIL's own submodules. |
 
 ## Submodule Rules
@@ -20,6 +20,17 @@ tools external when a stable binary interface is enough.
 Do not add Z3 as a submodule in the default repository. If exact solver
 reproducibility is needed, prefer a container, Nix/devcontainer file, or CI
 image pin over vendoring the solver source.
+
+The maintained compatibility checks are:
+
+```bash
+make test-k2-smoke          # distribution libz3-dev
+make test-k2-z3-release    # pinned upstream Z3 release zip
+```
+
+The upstream-release smoke downloads the official `z3-4.16.0` Linux binary
+release, verifies its sha256, builds K2 against that release's headers and
+library, runs the K2 CTest suite, and checks `k2_ebpf_equiv --version`.
 
 Do not add PREVAIL as a default submodule. The maintained interface is:
 

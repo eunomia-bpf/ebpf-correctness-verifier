@@ -98,6 +98,8 @@ ebpf-tv check OLD.o NEW.o \
 The first extracted internal backend is `k2_ebpf_equiv`:
 
 ```bash
+build/k2_ebpf_equiv --version
+
 build/k2_ebpf_equiv \
   --old OLD.ins \
   --new NEW.ins \
@@ -108,8 +110,9 @@ build/k2_ebpf_equiv \
 
 It uses K2's raw eBPF instruction reader, benchmark metadata reader, and
 `validator::is_equal_to` implementation. The project-owned wrapper only handles
-argument validation, K2 working-directory setup, noisy stdout isolation, JSON
-result formatting, and exit-code normalization:
+argument validation, K2 working-directory setup, noisy stdout isolation,
+K2/Z3 provenance reporting, JSON result formatting, and exit-code
+normalization:
 
 ```text
 exit 0 -> PASS,    K2 proved equivalence
@@ -136,6 +139,10 @@ Current scope:
 - explicit `.maps` and `.desc` overrides for programs that need packet, context,
   or map modeling
 - in-process system Z3, not K2's old z3server path
+- `k2_ebpf_equiv --version` reports the vendored K2 commit and linked Z3
+  version
+- CI covers both distribution `libz3-dev` and a sha256-verified pinned upstream
+  Z3 release build
 - smoke-tested on generated raw eBPF programs and clang-produced ELF objects
   for byte-identical PASS, ALU and stack-memory equivalent rewrites, and
   semantic FAIL

@@ -61,6 +61,13 @@ Build and run the vendored K2 eBPF semantics smoke test against the system Z3:
 make test-k2-smoke
 ```
 
+Build and run the same K2 smoke test against the pinned upstream Z3 release
+used by CI:
+
+```bash
+make test-k2-z3-release
+```
+
 Run the CI-covered K2 XDP CLI example:
 
 ```bash
@@ -70,6 +77,8 @@ make test-example-k2-xdp
 Run the K2-derived raw-instruction equivalence backend directly:
 
 ```bash
+build/k2_ebpf_equiv --version
+
 build/k2_ebpf_equiv \
   --old old.ins \
   --new new.ins \
@@ -202,10 +211,11 @@ deliberately small: XDP sections default to K2 packet input with a bounded
 ## CI
 
 GitHub Actions runs `make test` on Ubuntu 24.04 with system `libz3-dev`,
-`clang`, `llvm`, and CMake. The CI suite covers the Python frontend, K2
-instruction semantics, the K2 raw equivalence wrapper, and the `ebpf-tv check
---equiv-backend k2` ELF-section integration smoke test. The integration fixture
-checks byte-identical objects, non-identical equivalent rewrites
+`clang`, `llvm`, and CMake, plus an independent `make test-k2-z3-release` job
+against the pinned upstream Z3 release. The CI suite covers the Python
+frontend, K2 instruction semantics, the K2 raw equivalence wrapper, and the
+`ebpf-tv check --equiv-backend k2` ELF-section integration smoke test. The
+integration fixture checks byte-identical objects, non-identical equivalent rewrites
 (`r0 = 1` versus `r0 = 0; r0 += 1`, and direct register return versus
 stack store/load), and a return-value counterexample. The raw K2 backend smoke
 also covers explicit map metadata and packet-input metadata with supported

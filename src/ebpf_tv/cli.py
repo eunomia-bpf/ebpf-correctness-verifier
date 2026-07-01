@@ -98,6 +98,8 @@ def build_capabilities() -> dict[str, object]:
                 "mode": "system",
                 "package": "libz3-dev",
                 "default_submodule": False,
+                "upstream_release_smoke": "make test-k2-z3-release",
+                "upstream_release_version": "4.16.0",
             },
         },
         "equivalence_backends": {
@@ -121,6 +123,7 @@ def build_capabilities() -> dict[str, object]:
                     "constant-input desc generation for unknown sections",
                     "shared old/new K2 environment",
                     "system Z3 library integration",
+                    "K2/Z3 provenance reporting through k2_ebpf_equiv --version",
                 ],
                 "tested_positive_cases": [
                     "byte-identical programs",

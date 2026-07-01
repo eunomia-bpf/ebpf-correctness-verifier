@@ -15,10 +15,13 @@ equivalence.
 
 `ebpf-tv` does not use K2's original top-level Makefile as the maintained entry
 point because that Makefile expects an old sibling Z3 checkout at
-`../z3/build/config.mk`. Instead, the repository root contains a CMake smoke
-target that compiles K2's eBPF instruction/codegen test against the system Z3
-headers and library.
+`../z3/build/config.mk`. Instead, the repository root contains CMake targets
+that compile K2's eBPF instruction/codegen smoke test and the
+`k2_ebpf_equiv` old/new equivalence wrapper against the system Z3 headers and
+library. The repository also provides `make test-k2-z3-release`, which rebuilds
+the same targets against the pinned official upstream Z3 release used by CI.
 
-The next modernization step is to extract a small old/new equivalence CLI from
-`src/verify` and `src/isa/ebpf` while preserving K2's original MIT license and
-provenance.
+The wrapper preserves K2's original MIT license and provenance. It only adds
+argument validation, JSON result formatting, normalized exit codes, and
+`--version` output reporting the vendored K2 commit and linked system Z3
+version.

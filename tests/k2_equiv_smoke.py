@@ -53,12 +53,36 @@ def run_case(
     return completed.returncode, payload, completed.stderr
 
 
+def run_version(tool: Path) -> dict[str, object]:
+    completed = subprocess.run(
+        [str(tool), "--version"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    try:
+        return json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise AssertionError(
+            f"tool did not emit version JSON\nstdout={completed.stdout}\nstderr={completed.stderr}"
+        ) from exc
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
         raise SystemExit("usage: k2_equiv_smoke.py K2_EQUIV K2_ROOT")
 
     tool = Path(argv[1]).resolve()
     k2_root = Path(argv[2]).resolve()
+
+    version = run_version(tool)
+    assert version["backend"] == "k2", version
+    assert version["wrapper"] == "k2_ebpf_equiv", version
+    assert version["k2_source"]["vendored_commit"] == "f50ee1f", version
+    assert version["z3"]["mode"] == "in-process-system-library", version
+    assert version["z3"]["major"] >= 4, version
+    assert version["z3server"] is False, version
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)

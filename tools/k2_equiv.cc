@@ -4,6 +4,8 @@
 #include <stdexcept>
 #include <string>
 
+#include <z3.h>
+
 #include "measure/benchmark_ebpf.h"
 #include "src/isa/ebpf/inst.h"
 #include "src/isa/ebpf/inst_var.h"
@@ -25,6 +27,7 @@ struct Args {
   fs::path map_path;
   fs::path desc_path;
   fs::path k2_root;
+  bool show_version = false;
 };
 
 class ScopedCoutRedirect {
@@ -65,7 +68,8 @@ std::string json_escape(const std::string& input) {
 void print_usage(const char* argv0) {
   std::cerr
       << "usage: " << argv0
-      << " --old OLD.ins --new NEW.ins --map MAPS --desc DESC --k2-root DIR\n";
+      << " --old OLD.ins --new NEW.ins --map MAPS --desc DESC --k2-root DIR\n"
+      << "       " << argv0 << " --version\n";
 }
 
 void emit_result(const std::string& result, const std::string& reason,
@@ -80,6 +84,32 @@ void emit_result(const std::string& result, const std::string& reason,
             << "  \"desc\": \"" << json_escape(args.desc_path.string()) << "\",\n"
             << "  \"old_len\": " << old_len << ",\n"
             << "  \"new_len\": " << new_len << "\n"
+            << "}\n";
+}
+
+void emit_version() {
+  unsigned major = 0;
+  unsigned minor = 0;
+  unsigned build = 0;
+  unsigned revision = 0;
+  Z3_get_version(&major, &minor, &build, &revision);
+  std::cout << "{\n"
+            << "  \"backend\": \"k2\",\n"
+            << "  \"wrapper\": \"k2_ebpf_equiv\",\n"
+            << "  \"k2_source\": {\n"
+            << "    \"repository\": \"https://github.com/smartnic/superopt\",\n"
+            << "    \"vendored_commit\": \"f50ee1f\"\n"
+            << "  },\n"
+            << "  \"z3\": {\n"
+            << "    \"mode\": \"in-process-system-library\",\n"
+            << "    \"full_version\": \"" << json_escape(Z3_get_full_version())
+            << "\",\n"
+            << "    \"major\": " << major << ",\n"
+            << "    \"minor\": " << minor << ",\n"
+            << "    \"build\": " << build << ",\n"
+            << "    \"revision\": " << revision << "\n"
+            << "  },\n"
+            << "  \"z3server\": false\n"
             << "}\n";
 }
 
@@ -104,12 +134,18 @@ Args parse_args(int argc, char** argv) {
       args.desc_path = require_value(arg);
     } else if (arg == "--k2-root") {
       args.k2_root = require_value(arg);
+    } else if (arg == "--version") {
+      args.show_version = true;
     } else if (arg == "--help" || arg == "-h") {
       print_usage(argv[0]);
       std::exit(EXIT_PASS);
     } else {
       throw std::invalid_argument("unknown argument: " + arg);
     }
+  }
+
+  if (args.show_version) {
+    return args;
   }
 
   if (args.old_path.empty() || args.new_path.empty() || args.map_path.empty() ||
@@ -213,7 +249,12 @@ int run_equivalence(const Args& args) {
 
 int main(int argc, char** argv) {
   try {
-    Args args = normalize_args(parse_args(argc, argv));
+    Args parsed_args = parse_args(argc, argv);
+    if (parsed_args.show_version) {
+      emit_version();
+      return EXIT_PASS;
+    }
+    Args args = normalize_args(parsed_args);
     return run_equivalence(args);
   } catch (const std::exception& error) {
     print_usage(argv[0]);
