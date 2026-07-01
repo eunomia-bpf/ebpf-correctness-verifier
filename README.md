@@ -195,7 +195,9 @@ equivalence backend is configured. The vendored K2 backend can be selected with
 auto-extracted legacy `maps` metadata, section-inferred `.desc` metadata, or
 user-supplied `.maps` and `.desc` metadata. The current section inference is
 deliberately small: XDP sections default to K2 packet input with a bounded
-64-byte packet size, and unknown sections default to constant input.
+64-byte packet size, and unknown sections default to constant input. When users
+provide separate `--k2-old-desc` and `--k2-new-desc` metadata files, `ebpf-tv`
+checks that the explicit program descriptions match before invoking K2.
 
 ## Documents
 

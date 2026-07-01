@@ -143,6 +143,9 @@ Current scope:
 - `FAIL` when old/new legacy map metadata differs before equivalence checking
 - explicit `.maps` and `.desc` overrides for programs that need packet, context,
   or map modeling
+- explicit `--k2-old-desc` and `--k2-new-desc` inputs are compared byte-for-byte
+  before K2 is invoked; mismatched program descriptions return `FAIL` with
+  `program_description_mismatch`
 - in-process system Z3, not K2's old z3server path
 - `k2_ebpf_equiv --version` reports the vendored K2 commit and linked Z3
   version
@@ -154,8 +157,9 @@ Current scope:
 - raw-backend smoke coverage for explicit map metadata and packet-input
   metadata, including supported PASS and FAIL cases
 - ELF-section frontend coverage for explicit map metadata, automatic legacy map
-  extraction, section-inferred packet metadata, and packet-input metadata
-  through `ebpf-tv check --equiv-backend k2`
+  extraction, explicit old/new description matching and mismatch, section-inferred
+  packet metadata, and packet-input metadata through `ebpf-tv check
+  --equiv-backend k2`
 
 Known gaps:
 
@@ -163,5 +167,7 @@ Known gaps:
   metadata is intentionally limited to section-prefix inference unless
   overridden
 - no modern BTF `.maps` extraction or CO-RE relocation modeling yet
+- no automatic program-type/context compatibility extraction from loader or BTF
+  metadata yet
 - complex K2 fixtures can still hit old unsupported pointer-model paths and must
   return `UNKNOWN`

@@ -123,6 +123,7 @@ def build_capabilities() -> dict[str, object]:
                     "ELF section extraction through llvm-objcopy or objcopy",
                     "legacy SEC(\"maps\") struct bpf_map_def extraction",
                     "explicit K2 .maps and .desc overrides",
+                    "explicit old/new K2 .desc compatibility precheck",
                     "generated empty map environment",
                     "XDP section prefix to packet-input desc inference",
                     "constant-input desc generation for unknown sections",
@@ -141,6 +142,7 @@ def build_capabilities() -> dict[str, object]:
                     "different return constants",
                     "map update/lookup counterexample",
                     "legacy map metadata mismatch",
+                    "program description metadata mismatch",
                     "different packet byte offsets",
                 ],
             },
@@ -148,7 +150,7 @@ def build_capabilities() -> dict[str, object]:
         "known_gaps": [
             "BTF .maps extraction",
             "CO-RE relocation modeling",
-            "loader-derived program/context metadata",
+            "automatic loader-derived program/context metadata extraction",
             "kernel verifier load gate",
             "BPF_PROG_RUN differential execution",
             "helper side effects beyond current K2 fixtures",
@@ -406,6 +408,31 @@ def write_k2_maps(path: Path, maps: list[K2MapSpec]) -> None:
     path.write_text("".join(spec.to_k2_line(index) for index, spec in enumerate(maps)))
 
 
+def compare_k2_desc_pair(old_desc: Path, new_desc: Path) -> StageResult:
+    try:
+        old_data = old_desc.read_bytes()
+        new_data = new_desc.read_bytes()
+    except OSError as error:
+        return StageResult(
+            name="k2_desc_env",
+            result=UNKNOWN,
+            reason="program_description_read_failed",
+            stderr=str(error),
+        )
+
+    if old_data != new_data:
+        return StageResult(
+            name="k2_desc_env",
+            result=FAIL,
+            reason="program_description_mismatch",
+        )
+    return StageResult(
+        name="k2_desc_env",
+        result=PASS,
+        reason="program_description_match",
+    )
+
+
 def run_legacy_map_extract(
     name: str,
     obj: Path,
@@ -503,6 +530,8 @@ def run_k2_elf_equivalence(
     k2_root: str,
     k2_map: str | None,
     k2_desc: str | None,
+    k2_old_desc: str | None,
+    k2_new_desc: str | None,
     k2_input_type: str,
     k2_max_pkt_size: int,
     objcopy_bin: str,
@@ -524,6 +553,10 @@ def run_k2_elf_equivalence(
         required_paths.append(("input_k2_map", Path(k2_map)))
     if k2_desc:
         required_paths.append(("input_k2_desc", Path(k2_desc)))
+    if k2_old_desc:
+        required_paths.append(("input_k2_old_desc", Path(k2_old_desc)))
+    if k2_new_desc:
+        required_paths.append(("input_k2_new_desc", Path(k2_new_desc)))
 
     for name, path in required_paths:
         if not path.exists():
@@ -536,8 +569,20 @@ def run_k2_elf_equivalence(
         tmp_path = Path(tmp)
         old_insns = tmp_path / "old.ins"
         new_insns = tmp_path / "new.ins"
+        using_desc_pair = k2_old_desc is not None and k2_new_desc is not None
         map_path = Path(k2_map) if k2_map else tmp_path / "generated.maps"
-        desc_path = Path(k2_desc) if k2_desc else tmp_path / "generated.desc"
+        if k2_desc:
+            desc_path = Path(k2_desc)
+        elif using_desc_pair:
+            desc_path = Path(k2_old_desc)
+        else:
+            desc_path = tmp_path / "generated.desc"
+        generated_map = k2_map is None
+        generated_desc = k2_desc is None and not using_desc_pair
+        if using_desc_pair:
+            stages.append(compare_k2_desc_pair(Path(k2_old_desc), Path(k2_new_desc)))
+            if combine(stages) != PASS:
+                return stages
         if not k2_map:
             old_maps_stage, old_maps = run_legacy_map_extract(
                 "k2_maps_old",
@@ -566,7 +611,7 @@ def run_k2_elf_equivalence(
                 )
                 return stages
             write_k2_maps(map_path, old_maps)
-        if not k2_desc:
+        if generated_desc:
             input_type_name, max_pkt_size = resolve_k2_desc_inputs(
                 section,
                 k2_input_type,
@@ -577,7 +622,7 @@ def run_k2_elf_equivalence(
                 f"{{ pgm_input_type = {input_type}, }}\n"
                 f"{{ max_pkt_sz = {max_pkt_size}, }}\n"
             )
-        if not k2_map or not k2_desc:
+        if generated_map or generated_desc:
             stages.append(
                 StageResult(
                     name="k2_env",
@@ -759,6 +804,8 @@ def check(args: argparse.Namespace) -> int:
                     args.k2_root,
                     args.k2_map,
                     args.k2_desc,
+                    args.k2_old_desc,
+                    args.k2_new_desc,
                     args.k2_input_type,
                     args.k2_max_pkt_size,
                     args.objcopy_bin,
@@ -836,7 +883,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     check_parser.add_argument(
         "--k2-desc",
-        help="K2 program description file; omitted means generate one from --k2-input-type and --k2-max-pkt-size",
+        help=(
+            "shared K2 program description file; omitted means generate one "
+            "from --k2-input-type and --k2-max-pkt-size"
+        ),
+    )
+    check_parser.add_argument(
+        "--k2-old-desc",
+        help=(
+            "K2 description for the old program; must be paired with "
+            "--k2-new-desc and must match before K2 equivalence is invoked"
+        ),
+    )
+    check_parser.add_argument(
+        "--k2-new-desc",
+        help=(
+            "K2 description for the new program; must be paired with "
+            "--k2-old-desc and must match before K2 equivalence is invoked"
+        ),
     )
     check_parser.add_argument(
         "--k2-input-type",
@@ -892,6 +956,10 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--equiv-backend k2 requires --k2-root")
         if args.k2_max_pkt_size < 0:
             parser.error("--k2-max-pkt-size must be non-negative")
+        if bool(args.k2_old_desc) != bool(args.k2_new_desc):
+            parser.error("--k2-old-desc and --k2-new-desc must be provided together")
+        if args.k2_desc and (args.k2_old_desc or args.k2_new_desc):
+            parser.error("--k2-desc cannot be combined with --k2-old-desc/--k2-new-desc")
     return args.func(args)
 
 

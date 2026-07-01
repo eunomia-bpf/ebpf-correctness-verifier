@@ -388,6 +388,172 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result["result"], "PASS")
             self.assertEqual(result["stages"][-1]["reason"], "k2_equivalence_pass")
 
+    def test_k2_equivalence_backend_rejects_desc_mismatch_before_k2(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            old = tmp_path / "old.o"
+            new = tmp_path / "new.o"
+            old.write_bytes(b"old-elf")
+            new.write_bytes(b"new-elf")
+            old_desc = tmp_path / "old.desc"
+            new_desc = tmp_path / "new.desc"
+            old_desc.write_text("{ pgm_input_type = 1, }\n{ max_pkt_sz = 64, }\n")
+            new_desc.write_text("{ pgm_input_type = 0, }\n{ max_pkt_sz = 0, }\n")
+            marker = tmp_path / "k2-invoked"
+            prevail = make_executable(
+                tmp_path / "prevail",
+                """\
+                #!/usr/bin/env sh
+                echo "PASS: $2/func"
+                """,
+            )
+            k2_equiv = make_executable(
+                tmp_path / "k2_equiv",
+                f"""\
+                #!/usr/bin/env sh
+                touch "{marker}"
+                exit 0
+                """,
+            )
+
+            completed = run_cli(
+                [
+                    "check",
+                    str(old),
+                    str(new),
+                    "--section",
+                    "xdp",
+                    "--prevail-bin",
+                    str(prevail),
+                    "--equiv-backend",
+                    "k2",
+                    "--k2-equiv",
+                    str(k2_equiv),
+                    "--k2-root",
+                    str(tmp_path),
+                    "--k2-old-desc",
+                    str(old_desc),
+                    "--k2-new-desc",
+                    str(new_desc),
+                ]
+            )
+
+            self.assertEqual(completed.returncode, 1)
+            self.assertFalse(marker.exists())
+            result = json.loads(completed.stdout)
+            self.assertEqual(result["result"], "FAIL")
+            self.assertIn(
+                ("k2_desc_env", "program_description_mismatch"),
+                [(stage["name"], stage["reason"]) for stage in result["stages"]],
+            )
+            self.assertNotIn(
+                "equivalence",
+                [stage["name"] for stage in result["stages"]],
+            )
+
+    def test_k2_equivalence_backend_accepts_matching_desc_pair(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            obj = tmp_path / "prog.o"
+            obj.write_bytes(b"elf")
+            old_desc = tmp_path / "old.desc"
+            new_desc = tmp_path / "new.desc"
+            desc_text = "{ pgm_input_type = 1, }\n{ max_pkt_sz = 64, }\n"
+            old_desc.write_text(desc_text)
+            new_desc.write_text(desc_text)
+            prevail = make_executable(
+                tmp_path / "prevail",
+                """\
+                #!/usr/bin/env sh
+                echo "PASS: $2/func"
+                """,
+            )
+            objcopy = make_executable(
+                tmp_path / "objcopy",
+                """\
+                #!/usr/bin/env sh
+                spec="${1#--dump-section=}"
+                section="${spec%%=*}"
+                out="${spec#*=}"
+                [ "$section" = "maps" ] && exit 1
+                printf section > "$out"
+                """,
+            )
+            k2_equiv = make_executable(
+                tmp_path / "k2_equiv",
+                """\
+                #!/usr/bin/env sh
+                while [ "$#" -gt 0 ]; do
+                  case "$1" in
+                    --map) shift; map="$1" ;;
+                    --desc) shift; desc="$1" ;;
+                  esac
+                  shift
+                done
+                [ ! -s "$map" ] || exit 2
+                grep -q "pgm_input_type = 1" "$desc" || exit 2
+                grep -q "max_pkt_sz = 64" "$desc" || exit 2
+                exit 0
+                """,
+            )
+
+            completed = run_cli(
+                [
+                    "check",
+                    str(obj),
+                    str(obj),
+                    "--section",
+                    "xdp",
+                    "--prevail-bin",
+                    str(prevail),
+                    "--equiv-backend",
+                    "k2",
+                    "--k2-equiv",
+                    str(k2_equiv),
+                    "--k2-root",
+                    str(tmp_path),
+                    "--k2-old-desc",
+                    str(old_desc),
+                    "--k2-new-desc",
+                    str(new_desc),
+                    "--objcopy-bin",
+                    str(objcopy),
+                ]
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            result = json.loads(completed.stdout)
+            self.assertEqual(result["result"], "PASS")
+            self.assertIn(
+                ("k2_desc_env", "program_description_match"),
+                [(stage["name"], stage["reason"]) for stage in result["stages"]],
+            )
+            self.assertEqual(result["stages"][-1]["reason"], "k2_equivalence_pass")
+
+    def test_k2_desc_pair_must_be_complete(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            completed = run_cli(
+                [
+                    "check",
+                    str(Path(tmp) / "old.o"),
+                    str(Path(tmp) / "new.o"),
+                    "--section",
+                    "xdp",
+                    "--equiv-backend",
+                    "k2",
+                    "--k2-root",
+                    tmp,
+                    "--k2-old-desc",
+                    str(Path(tmp) / "old.desc"),
+                ]
+            )
+
+            self.assertEqual(completed.returncode, 2)
+            self.assertIn(
+                "--k2-old-desc and --k2-new-desc must be provided together",
+                completed.stderr,
+            )
+
     def test_k2_equivalence_backend_auto_extracts_legacy_maps(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -738,6 +904,10 @@ class CliTests(unittest.TestCase):
         )
         self.assertIn(
             "K2/Z3 provenance reporting through k2_ebpf_equiv --version",
+            result["equivalence_backends"]["k2"]["features"],
+        )
+        self.assertIn(
+            "explicit old/new K2 .desc compatibility precheck",
             result["equivalence_backends"]["k2"]["features"],
         )
         self.assertIn("BTF .maps extraction", result["known_gaps"])
