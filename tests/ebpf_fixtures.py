@@ -25,6 +25,16 @@ def raw_insn(opcode: int, dst: int = 0, src: int = 0, off: int = 0, imm: int = 0
     return struct.pack("<BBhi", opcode, regs, off, imm)
 
 
+def legacy_map_def(
+    map_type: int = 1,
+    key_size: int = 1,
+    value_size: int = 1,
+    max_entries: int = 32,
+    map_flags: int = 0,
+) -> bytes:
+    return struct.pack("<IIIII", map_type, key_size, value_size, max_entries, map_flags)
+
+
 def return_constant(value: int) -> bytes:
     return raw_insn(BPF_ALU64_MOV_K, dst=0, imm=value) + raw_insn(BPF_EXIT)
 

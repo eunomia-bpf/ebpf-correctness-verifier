@@ -10,6 +10,8 @@ import textwrap
 import unittest
 from pathlib import Path
 
+from ebpf_fixtures import legacy_map_def
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHONPATH = str(ROOT / "src")
@@ -191,7 +193,9 @@ class CliTests(unittest.TestCase):
                 """\
                 #!/usr/bin/env sh
                 spec="${1#--dump-section=}"
+                section="${spec%%=*}"
                 out="${spec#*=}"
+                [ "$section" = "maps" ] && exit 1
                 case "$2" in
                   *old.o) printf old > "$out" ;;
                   *new.o) printf new > "$out" ;;
@@ -243,7 +247,7 @@ class CliTests(unittest.TestCase):
             result = json.loads(completed.stdout)
             self.assertEqual(result["result"], "PASS")
             self.assertIn(
-                ("k2_env", "generated_default_environment"),
+                ("k2_env", "generated_k2_environment"),
                 [(stage["name"], stage["reason"]) for stage in result["stages"]],
             )
             self.assertEqual(result["stages"][-1]["reason"], "k2_equivalence_pass")
@@ -265,7 +269,9 @@ class CliTests(unittest.TestCase):
                 """\
                 #!/usr/bin/env sh
                 spec="${1#--dump-section=}"
+                section="${spec%%=*}"
                 out="${spec#*=}"
+                [ "$section" = "maps" ] && exit 1
                 printf section > "$out"
                 """,
             )
@@ -315,6 +321,159 @@ class CliTests(unittest.TestCase):
             result = json.loads(completed.stdout)
             self.assertEqual(result["result"], "PASS")
             self.assertEqual(result["stages"][-1]["reason"], "k2_equivalence_pass")
+
+    def test_k2_equivalence_backend_auto_extracts_legacy_maps(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            old = tmp_path / "old.o"
+            new = tmp_path / "new.o"
+            old.write_bytes(b"old-elf")
+            new.write_bytes(b"new-elf")
+            map_hex = legacy_map_def(key_size=4, value_size=8, max_entries=16).hex()
+            prevail = make_executable(
+                tmp_path / "prevail",
+                """\
+                #!/usr/bin/env sh
+                echo "PASS: $2/func"
+                """,
+            )
+            objcopy = make_executable(
+                tmp_path / "objcopy",
+                f"""\
+                #!/usr/bin/env python3
+                from pathlib import Path
+                import sys
+
+                spec = sys.argv[1][len("--dump-section="):]
+                section, output = spec.split("=", 1)
+                if section == "maps":
+                    Path(output).write_bytes(bytes.fromhex("{map_hex}"))
+                elif section == "xdp":
+                    Path(output).write_bytes(b"section")
+                else:
+                    raise SystemExit(1)
+                """,
+            )
+            k2_equiv = make_executable(
+                tmp_path / "k2_equiv",
+                """\
+                #!/usr/bin/env sh
+                while [ "$#" -gt 0 ]; do
+                  case "$1" in
+                    --map) shift; map="$1" ;;
+                    --desc) shift; desc="$1" ;;
+                  esac
+                  shift
+                done
+                grep -q "key_size = 4" "$map" || exit 2
+                grep -q "value_size = 8" "$map" || exit 2
+                grep -q "max_entries = 16" "$map" || exit 2
+                grep -q "pgm_input_type = 0" "$desc" || exit 2
+                exit 0
+                """,
+            )
+
+            completed = run_cli(
+                [
+                    "check",
+                    str(old),
+                    str(new),
+                    "--section",
+                    "xdp",
+                    "--prevail-bin",
+                    str(prevail),
+                    "--equiv-backend",
+                    "k2",
+                    "--k2-equiv",
+                    str(k2_equiv),
+                    "--k2-root",
+                    str(tmp_path),
+                    "--objcopy-bin",
+                    str(objcopy),
+                ]
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            result = json.loads(completed.stdout)
+            self.assertEqual(result["result"], "PASS")
+            self.assertIn(
+                ("k2_maps_old", "legacy_maps_extracted"),
+                [(stage["name"], stage["reason"]) for stage in result["stages"]],
+            )
+            self.assertEqual(result["stages"][-1]["reason"], "k2_equivalence_pass")
+
+    def test_k2_equivalence_backend_rejects_legacy_map_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            old = tmp_path / "old.o"
+            new = tmp_path / "new.o"
+            old.write_bytes(b"old-elf")
+            new.write_bytes(b"new-elf")
+            old_map_hex = legacy_map_def(key_size=4).hex()
+            new_map_hex = legacy_map_def(key_size=8).hex()
+            prevail = make_executable(
+                tmp_path / "prevail",
+                """\
+                #!/usr/bin/env sh
+                echo "PASS: $2/func"
+                """,
+            )
+            objcopy = make_executable(
+                tmp_path / "objcopy",
+                f"""\
+                #!/usr/bin/env python3
+                from pathlib import Path
+                import sys
+
+                spec = sys.argv[1][len("--dump-section="):]
+                section, output = spec.split("=", 1)
+                obj = Path(sys.argv[2]).name
+                if section == "maps":
+                    if obj == "old.o":
+                        Path(output).write_bytes(bytes.fromhex("{old_map_hex}"))
+                    else:
+                        Path(output).write_bytes(bytes.fromhex("{new_map_hex}"))
+                elif section == "xdp":
+                    Path(output).write_bytes(b"section")
+                else:
+                    raise SystemExit(1)
+                """,
+            )
+            k2_equiv = make_executable(
+                tmp_path / "k2_equiv",
+                """\
+                #!/usr/bin/env sh
+                exit 0
+                """,
+            )
+
+            completed = run_cli(
+                [
+                    "check",
+                    str(old),
+                    str(new),
+                    "--section",
+                    "xdp",
+                    "--prevail-bin",
+                    str(prevail),
+                    "--equiv-backend",
+                    "k2",
+                    "--k2-equiv",
+                    str(k2_equiv),
+                    "--k2-root",
+                    str(tmp_path),
+                    "--objcopy-bin",
+                    str(objcopy),
+                ]
+            )
+
+            self.assertEqual(completed.returncode, 1)
+            result = json.loads(completed.stdout)
+            self.assertEqual(result["result"], "FAIL")
+            self.assertIn(
+                ("k2_map_env", "legacy_map_metadata_mismatch"),
+                [(stage["name"], stage["reason"]) for stage in result["stages"]],
+            )
 
     def test_k2_equivalence_backend_fails_different_extracted_sections(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -114,8 +114,11 @@ Current scope:
   `objcopy`
 - `k2_ebpf_equiv` checks raw K2 `.ins` bytecode inputs
 - one shared K2 environment for old/new
-- generated no-map constant-input environment when `--k2-map` and `--k2-desc`
-  are omitted
+- automatic K2 `.maps` generation from matching legacy ELF `maps` sections
+  containing `struct bpf_map_def` records when `--k2-map` is omitted
+- generated empty-map constant-input environment when no legacy `maps` section
+  exists and `--k2-map`/`--k2-desc` are omitted
+- `FAIL` when old/new legacy map metadata differs before equivalence checking
 - explicit `.maps` and `.desc` overrides for programs that need packet, context,
   or map modeling
 - in-process system Z3, not K2's old z3server path
@@ -124,13 +127,14 @@ Current scope:
   semantic FAIL
 - raw-backend smoke coverage for explicit map metadata and packet-input
   metadata, including supported PASS and FAIL cases
-- ELF-section frontend coverage for explicit map metadata and packet-input
-  metadata through `ebpf-tv check --equiv-backend k2`
+- ELF-section frontend coverage for explicit map metadata, automatic legacy map
+  extraction, and packet-input metadata through `ebpf-tv check --equiv-backend
+  k2`
 
 Known gaps:
 
-- no automatic map/desc extraction from ELF metadata yet; generated metadata is
-  intentionally only a simple default
-- no CO-RE/BTF relocation modeling yet
+- no automatic program description extraction yet; generated `.desc` metadata is
+  intentionally only a simple default unless overridden
+- no modern BTF `.maps` extraction or CO-RE relocation modeling yet
 - complex K2 fixtures can still hit old unsupported pointer-model paths and must
   return `UNKNOWN`

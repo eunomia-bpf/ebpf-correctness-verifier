@@ -20,6 +20,7 @@ UNKNOWN = "UNKNOWN"
 
 BPF_ALU64_MOV_K = 0xB7
 BPF_EXIT = 0x95
+BPF_MAP_DEF_RECORD_SIZE = 20
 
 K2_INPUT_TYPES = {
     "constant": 0,
@@ -47,6 +48,22 @@ class ValidationResult:
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2, sort_keys=True)
+
+
+@dataclass(frozen=True)
+class K2MapSpec:
+    map_type: int
+    key_size: int
+    value_size: int
+    max_entries: int
+    map_flags: int = 0
+
+    def to_k2_line(self, index: int) -> str:
+        return (
+            f"map{index} {{ type = {self.map_type}, key_size = {self.key_size}, "
+            f"value_size = {self.value_size}, max_entries = {self.max_entries}, "
+            f"fd = {index} }}\n"
+        )
 
 
 def run_command(command: list[str], timeout: int) -> StageResult:
@@ -219,6 +236,72 @@ def run_objcopy_dump_section(
     return stage
 
 
+def parse_legacy_map_section(data: bytes) -> list[K2MapSpec]:
+    if not data:
+        return []
+    if len(data) % BPF_MAP_DEF_RECORD_SIZE != 0:
+        raise ValueError(
+            f"legacy maps section size {len(data)} is not a multiple of "
+            f"{BPF_MAP_DEF_RECORD_SIZE}"
+        )
+
+    maps: list[K2MapSpec] = []
+    for offset in range(0, len(data), BPF_MAP_DEF_RECORD_SIZE):
+        map_type, key_size, value_size, max_entries, map_flags = struct.unpack_from(
+            "<IIIII", data, offset
+        )
+        if map_type == 0 or key_size == 0 or value_size == 0 or max_entries == 0:
+            raise ValueError(f"legacy map record at offset {offset} has zero fields")
+        maps.append(K2MapSpec(map_type, key_size, value_size, max_entries, map_flags))
+    return maps
+
+
+def write_k2_maps(path: Path, maps: list[K2MapSpec]) -> None:
+    path.write_text("".join(spec.to_k2_line(index) for index, spec in enumerate(maps)))
+
+
+def run_legacy_map_extract(
+    name: str,
+    obj: Path,
+    output: Path,
+    objcopy_bin: str,
+    timeout: int,
+) -> tuple[StageResult, list[K2MapSpec]]:
+    tool = resolve_objcopy(objcopy_bin)
+    if tool is None:
+        return (
+            StageResult(name=name, result=UNKNOWN, reason="objcopy_not_found"),
+            [],
+        )
+
+    stage = run_command(
+        [tool, f"--dump-section=maps={output}", str(obj)],
+        timeout,
+    )
+    stage.name = name
+    if stage.exit_code != 0:
+        stage.result = PASS
+        stage.reason = "legacy_maps_not_found"
+        return stage, []
+    if not output.exists():
+        stage.result = UNKNOWN
+        stage.reason = "legacy_maps_dump_missing"
+        return stage, []
+
+    try:
+        maps = parse_legacy_map_section(output.read_bytes())
+    except ValueError as error:
+        stage.result = UNKNOWN
+        stage.reason = "legacy_maps_malformed"
+        stage.stderr = f"{stage.stderr}\n{error}".strip()
+        return stage, []
+
+    stage.result = PASS
+    stage.reason = "legacy_maps_extracted" if maps else "legacy_maps_empty"
+    stage.stdout = "".join(spec.to_k2_line(index) for index, spec in enumerate(maps))
+    return stage, maps
+
+
 def combine(stages: Iterable[StageResult]) -> str:
     results = [stage.result for stage in stages]
     if FAIL in results:
@@ -307,10 +390,36 @@ def run_k2_elf_equivalence(
         tmp_path = Path(tmp)
         old_insns = tmp_path / "old.ins"
         new_insns = tmp_path / "new.ins"
-        map_path = Path(k2_map) if k2_map else tmp_path / "empty.maps"
+        map_path = Path(k2_map) if k2_map else tmp_path / "generated.maps"
         desc_path = Path(k2_desc) if k2_desc else tmp_path / "generated.desc"
         if not k2_map:
-            map_path.write_text("")
+            old_maps_stage, old_maps = run_legacy_map_extract(
+                "k2_maps_old",
+                old,
+                tmp_path / "old.maps.raw",
+                objcopy_bin,
+                timeout,
+            )
+            new_maps_stage, new_maps = run_legacy_map_extract(
+                "k2_maps_new",
+                new,
+                tmp_path / "new.maps.raw",
+                objcopy_bin,
+                timeout,
+            )
+            stages.extend([old_maps_stage, new_maps_stage])
+            if combine(stages) != PASS:
+                return stages
+            if old_maps != new_maps:
+                stages.append(
+                    StageResult(
+                        name="k2_map_env",
+                        result=FAIL,
+                        reason="legacy_map_metadata_mismatch",
+                    )
+                )
+                return stages
+            write_k2_maps(map_path, old_maps)
         if not k2_desc:
             input_type = K2_INPUT_TYPES[k2_input_type]
             desc_path.write_text(
@@ -322,7 +431,7 @@ def run_k2_elf_equivalence(
                 StageResult(
                     name="k2_env",
                     result=PASS,
-                    reason="generated_default_environment",
+                    reason="generated_k2_environment",
                 )
             )
         stages.append(
@@ -569,7 +678,10 @@ def build_parser() -> argparse.ArgumentParser:
     check_parser.add_argument("--k2-root")
     check_parser.add_argument(
         "--k2-map",
-        help="K2 map metadata file; omitted means generate an empty map environment",
+        help=(
+            "K2 map metadata file; omitted means auto-extract legacy ELF "
+            "maps when present, otherwise generate an empty map environment"
+        ),
     )
     check_parser.add_argument(
         "--k2-desc",

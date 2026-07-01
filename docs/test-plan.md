@@ -38,7 +38,7 @@ access and upstream build stability.
 | CLI orchestration | `tests/test_cli.py` | `ebpf-tv` combines backend results as `FAIL > UNKNOWN > PASS` | identity pass, non-identical unknown, PREVAIL reject, missing PREVAIL, external fail |
 | K2 backend contract | `tests/k2_equiv_smoke.py` via CTest | `k2_ebpf_equiv` returns normalized exit codes and JSON | byte-identical pass, return-value fail, stack store/load equivalent pass, map update/lookup pass/fail, packet read pass/fail |
 | K2 instruction semantics | vendored `k2_ebpf_inst_codegen_test` via CTest | selected K2 eBPF instruction, memory, map-helper, map-equivalence, and packet formulas still build and run against modern system Z3 | inherited K2 smoke cases |
-| ELF adapter | `tests/k2_cli_integration.py` via CTest | `ebpf-tv` extracts ELF sections, generates default or explicit K2 metadata, and invokes K2 through the single CLI | byte-identical pass, ALU rewrite pass, stack-memory rewrite pass, map update/lookup pass/fail with explicit map metadata, packet read pass/fail with explicit packet metadata, return-value fail |
+| ELF adapter | `tests/k2_cli_integration.py` via CTest | `ebpf-tv` extracts ELF sections, generates default, auto-extracted legacy, or explicit K2 metadata, and invokes K2 through the single CLI | byte-identical pass, ALU rewrite pass, stack-memory rewrite pass, map update/lookup pass/fail with explicit map metadata, map rewrite pass with auto-extracted legacy map metadata, packet read pass/fail with explicit packet metadata, return-value fail |
 | CI | `.github/workflows/ci.yml` | fresh Ubuntu build installs dependencies and runs the same local gate | Python 3, clang/llvm, CMake, libz3-dev |
 | Optional PREVAIL smoke | `make test-prevail-smoke`, `.github/workflows/prevail-smoke.yml` | real PREVAIL build and sample fixtures still work at the pinned commit | `add.yaml`, `map.yaml`, `minimal.bpf.o` |
 
@@ -68,6 +68,8 @@ The K2 equivalence path currently has CI coverage for:
 - `r0 = r1; exit` versus `*(u32 *)(r10 - 4) = r1; r0 = *(u32 *)(r10 - 4); exit`
 - `map_update(k, r1); r0 = *map_lookup(k); exit` versus returning the same
   stack value used for the update
+- the same map rewrite through `ebpf-tv check` with K2 metadata generated from a
+  legacy ELF `maps` section
 - packet byte read at offset 0 versus itself under packet-input metadata
 
 The first checks adapter plumbing. The second checks non-identical ALU
@@ -82,6 +84,7 @@ The K2 equivalence path currently has CI coverage for:
 
 - `r0 = 0; exit` versus `r0 = 1; exit`
 - map update followed by lookup versus lookup-only
+- old/new legacy map metadata mismatch before K2 is invoked
 - packet byte read at offset 0 versus offset 1
 
 This must return `FAIL`, not `UNKNOWN`, because the backend should produce a
@@ -105,7 +108,8 @@ regular old/new object checks.
 
 The following are intentionally not claimed yet:
 
-- automatic map metadata extraction from ELF/BTF
+- modern BTF `.maps` metadata extraction
+- automatic program description extraction from ELF/BTF
 - CO-RE relocation modeling
 - helper side effects beyond K2's inherited smoke tests
 - map delete equivalence through `ebpf-tv check`

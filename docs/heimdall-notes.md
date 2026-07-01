@@ -1,6 +1,6 @@
 # Heimdall Notes
 
-Last checked: 2026-06-30.
+Last checked: 2026-07-01.
 
 Paper: [Heimdall: Formally Verified Automated Migration of Legacy eBPF Programs to Rust](https://arxiv.org/html/2605.25411v1).
 
@@ -10,6 +10,11 @@ Heimdall is the strongest recent blueprint for an agent-facing eBPF
 translation-validation loop, but I did not find a public implementation that can
 be reused as this project's first backend.
 
+The arXiv abstract reports 96 formally proven-equivalent translations out of
+102 evaluated eBPF programs (94.1%). The paper's public arXiv page does not
+currently expose an author-maintained implementation artifact; it only shows the
+standard external code-finder hooks.
+
 Use it as:
 
 - an architecture reference for compile, kernel verifier, safety-policy, and
@@ -17,6 +22,8 @@ Use it as:
 - an evaluation reference for showing that kernel-verifier success is not enough
 - a source of target fixtures for maps, globals, output sinks, atomics, and
   helper modeling
+- an OSDI-style evidence target for showing why compile/load/verifier success is
+  insufficient without an equivalence backend
 
 Do not treat it as:
 

@@ -12,6 +12,7 @@ import textwrap
 from pathlib import Path
 
 from ebpf_fixtures import (
+    legacy_map_def,
     map_lookup_only,
     map_update_then_lookup,
     map_update_then_stack_read,
@@ -56,6 +57,16 @@ def compile_bpf(clang: str, source: Path, output: Path) -> bool:
 def update_section(objcopy: str, base: Path, section_data: Path, output: Path) -> None:
     completed = subprocess.run(
         [objcopy, f"--update-section=xdp={section_data}", str(base), str(output)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+
+
+def add_section(objcopy: str, base: Path, name: str, section_data: Path, output: Path) -> None:
+    completed = subprocess.run(
+        [objcopy, f"--add-section={name}={section_data}", str(base), str(output)],
         check=False,
         capture_output=True,
         text=True,
@@ -145,6 +156,9 @@ def main(argv: list[str]) -> int:
         map_lookup_o = tmp_path / "map-lookup.o"
         packet0_o = tmp_path / "packet0.o"
         packet1_o = tmp_path / "packet1.o"
+        legacy_map_section = tmp_path / "legacy-map-section.bin"
+        map_update_lookup_auto_o = tmp_path / "map-update-lookup-auto.o"
+        map_update_stack_auto_o = tmp_path / "map-update-stack-auto.o"
         empty_maps = tmp_path / "empty.maps"
         map_meta = tmp_path / "map.maps"
         constant_desc = tmp_path / "constant.desc"
@@ -179,6 +193,7 @@ def main(argv: list[str]) -> int:
         map_lookup_raw.write_bytes(map_lookup_only())
         packet0_raw.write_bytes(packet_byte(0))
         packet1_raw.write_bytes(packet_byte(1))
+        legacy_map_section.write_bytes(legacy_map_def())
         empty_maps.write_text("")
         map_meta.write_text(
             "map0 { type = 1, key_size = 1, value_size = 1, "
@@ -195,6 +210,20 @@ def main(argv: list[str]) -> int:
         update_section(objcopy, ret1_o, map_lookup_raw, map_lookup_o)
         update_section(objcopy, ret1_o, packet0_raw, packet0_o)
         update_section(objcopy, ret1_o, packet1_raw, packet1_o)
+        add_section(
+            objcopy,
+            map_update_lookup_o,
+            "maps",
+            legacy_map_section,
+            map_update_lookup_auto_o,
+        )
+        add_section(
+            objcopy,
+            map_update_stack_o,
+            "maps",
+            legacy_map_section,
+            map_update_stack_auto_o,
+        )
 
         same = run_check(repo_root, ret0_o, ret0_o, prevail, k2_equiv, k2_root)
         assert same.returncode == 0, (same.stdout, same.stderr)
@@ -261,6 +290,30 @@ def main(argv: list[str]) -> int:
         map_payload = json.loads(map_rewrite.stdout)
         assert map_payload["result"] == "PASS", map_payload
         assert map_payload["stages"][-1]["reason"] == "k2_equivalence_pass", map_payload
+
+        map_auto_rewrite = run_check(
+            repo_root,
+            map_update_lookup_auto_o,
+            map_update_stack_auto_o,
+            prevail,
+            k2_equiv,
+            k2_root,
+        )
+        assert map_auto_rewrite.returncode == 0, (
+            map_auto_rewrite.stdout,
+            map_auto_rewrite.stderr,
+        )
+        map_auto_payload = json.loads(map_auto_rewrite.stdout)
+        assert map_auto_payload["result"] == "PASS", map_auto_payload
+        assert (
+            "k2_maps_old",
+            "legacy_maps_extracted",
+        ) in [
+            (stage["name"], stage["reason"]) for stage in map_auto_payload["stages"]
+        ], map_auto_payload
+        assert (
+            map_auto_payload["stages"][-1]["reason"] == "k2_equivalence_pass"
+        ), map_auto_payload
 
         map_diff = run_check(
             repo_root,
