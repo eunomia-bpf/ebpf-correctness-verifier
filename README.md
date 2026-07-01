@@ -27,6 +27,15 @@ observable behavior of the original program.
 
 ## Quick Start
 
+Install the CLI in a local virtual environment:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python3 -m pip install -e .
+ebpf-tv --help
+```
+
 Run the full local test suite:
 
 ```bash
@@ -59,7 +68,7 @@ build/k2_ebpf_equiv \
 Or run both K2 smoke checks through the Python frontend:
 
 ```bash
-PYTHONPATH=src python3 -m ebpf_tv selftest \
+ebpf-tv selftest \
   --k2-inst-codegen-test build/k2_ebpf_inst_codegen_test \
   --k2-equiv build/k2_ebpf_equiv \
   --k2-root third_party/k2-superopt
@@ -68,7 +77,7 @@ PYTHONPATH=src python3 -m ebpf_tv selftest \
 Run the CLI with an already-built PREVAIL binary:
 
 ```bash
-PYTHONPATH=src python3 -m ebpf_tv check old.bpf.o new.bpf.o \
+ebpf-tv check old.bpf.o new.bpf.o \
   --section xdp \
   --prevail-bin /path/to/prevail
 ```
@@ -76,7 +85,7 @@ PYTHONPATH=src python3 -m ebpf_tv check old.bpf.o new.bpf.o \
 Run the full v0 gate with PREVAIL and the K2 backend:
 
 ```bash
-PYTHONPATH=src python3 -m ebpf_tv check old.bpf.o new.bpf.o \
+ebpf-tv check old.bpf.o new.bpf.o \
   --section xdp \
   --prevail-bin /path/to/prevail \
   --equiv-backend k2 \
@@ -95,6 +104,9 @@ This clones `vbpf/prevail` outside the tracked source tree, applies a small
 builds `prevail` and `run_yaml`, then runs YAML and object smoke tests. It is
 kept out of the default `make test` gate because it depends on network access
 and upstream build behavior.
+
+For source-tree development without installing the package, use
+`PYTHONPATH=src python3 -m ebpf_tv ...`.
 
 The CLI returns JSON by default:
 

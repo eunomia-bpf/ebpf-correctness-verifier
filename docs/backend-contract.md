@@ -78,7 +78,7 @@ semantics test against the system Z3 library.
 The project exposes K2 through `ebpf-tv check --equiv-backend k2`:
 
 ```bash
-PYTHONPATH=src python3 -m ebpf_tv check OLD.o NEW.o \
+ebpf-tv check OLD.o NEW.o \
   --section xdp \
   --prevail-bin /path/to/prevail \
   --equiv-backend k2 \

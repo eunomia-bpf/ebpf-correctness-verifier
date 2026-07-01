@@ -15,6 +15,8 @@ make test
 `make test` is the same command used by GitHub Actions. It runs:
 
 - Python CLI unit tests
+- package installation and `ebpf-tv` console-script smoke tests in a temporary
+  virtual environment
 - K2 eBPF instruction/codegen smoke tests against the system Z3 library
 - K2 raw equivalence wrapper smoke tests
 - `ebpf-tv check --equiv-backend k2` ELF-section integration tests
@@ -36,10 +38,11 @@ access and upstream build stability.
 | Layer | Test entrypoint | What it proves | Current cases |
 | --- | --- | --- | --- |
 | CLI orchestration | `tests/test_cli.py` | `ebpf-tv` combines backend results as `FAIL > UNKNOWN > PASS` | identity pass, non-identical unknown, PREVAIL reject, missing PREVAIL, external fail |
+| Package smoke | `make test-package` | the project installs from `pyproject.toml` and exposes the `ebpf-tv` console script | top-level help and `check --help` |
 | K2 backend contract | `tests/k2_equiv_smoke.py` via CTest | `k2_ebpf_equiv` returns normalized exit codes and JSON | byte-identical pass, return-value fail, stack store/load equivalent pass, map update/lookup pass/fail, packet read pass/fail |
 | K2 instruction semantics | vendored `k2_ebpf_inst_codegen_test` via CTest | selected K2 eBPF instruction, memory, map-helper, map-equivalence, and packet formulas still build and run against modern system Z3 | inherited K2 smoke cases |
 | ELF adapter | `tests/k2_cli_integration.py` via CTest | `ebpf-tv` extracts ELF sections, generates default, auto-extracted legacy, or explicit K2 metadata, and invokes K2 through the single CLI | byte-identical pass, ALU rewrite pass, stack-memory rewrite pass, map update/lookup pass/fail with explicit map metadata, map rewrite pass with auto-extracted legacy map metadata, packet read pass/fail with explicit packet metadata, return-value fail |
-| CI | `.github/workflows/ci.yml` | fresh Ubuntu build installs dependencies and runs the same local gate | Python 3, clang/llvm, CMake, libz3-dev |
+| CI | `.github/workflows/ci.yml` | fresh Ubuntu build installs dependencies and runs the same local gate | Python 3 packaging tools, clang/llvm, CMake, libz3-dev |
 | Optional PREVAIL smoke | `make test-prevail-smoke`, `.github/workflows/prevail-smoke.yml` | real PREVAIL build and sample fixtures still work at the pinned commit | `add.yaml`, `map.yaml`, `minimal.bpf.o` |
 
 ## Heimdall-Derived Acceptance Lessons

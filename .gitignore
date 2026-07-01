@@ -2,6 +2,7 @@
 target/
 build/
 dist/
+*.egg-info/
 *.o
 *.so
 *.a
