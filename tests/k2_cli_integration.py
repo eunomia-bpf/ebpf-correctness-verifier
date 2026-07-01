@@ -30,14 +30,14 @@ def make_executable(path: Path, content: str) -> Path:
     return path
 
 
-def compile_bpf(clang: str, source: Path, output: Path) -> bool:
+def compile_bpf(clang: str, source: Path, output: Path, debug: bool = False) -> bool:
     completed = subprocess.run(
         [
             clang,
             "-target",
             "bpf",
             "-O2",
-            "-g0",
+            "-g" if debug else "-g0",
             "-c",
             str(source),
             "-o",
@@ -52,6 +52,21 @@ def compile_bpf(clang: str, source: Path, output: Path) -> bool:
         print(completed.stderr)
         return False
     return True
+
+
+def dump_required_section(objcopy: str, obj: Path, section: str, output: Path) -> None:
+    completed = subprocess.run(
+        [objcopy, f"--dump-section={section}={output}", str(obj)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert (
+        completed.returncode == 0 and output.exists() and output.stat().st_size > 0
+    ), (
+        completed.stdout,
+        completed.stderr,
+    )
 
 
 def update_section(objcopy: str, base: Path, section_data: Path, output: Path) -> None:
@@ -137,7 +152,9 @@ def main(argv: list[str]) -> int:
         ret0_c = tmp_path / "ret0.c"
         ret1_c = tmp_path / "ret1.c"
         ret0_o = tmp_path / "ret0.o"
+        ret0_btf_o = tmp_path / "ret0-btf.o"
         ret1_o = tmp_path / "ret1.o"
+        ret0_btf_raw = tmp_path / "ret0.btf"
         ret1_raw = tmp_path / "ret1.ins"
         ret1_add_raw = tmp_path / "ret1-add.ins"
         direct_raw = tmp_path / "direct.ins"
@@ -181,8 +198,11 @@ def main(argv: list[str]) -> int:
 
         if not compile_bpf(clang, ret0_c, ret0_o):
             return 0
+        if not compile_bpf(clang, ret0_c, ret0_btf_o, debug=True):
+            return 0
         if not compile_bpf(clang, ret1_c, ret1_o):
             return 0
+        dump_required_section(objcopy, ret0_btf_o, ".BTF", ret0_btf_raw)
 
         ret1_raw.write_bytes(return_constant(1))
         ret1_add_raw.write_bytes(return_one_via_add())
@@ -230,6 +250,25 @@ def main(argv: list[str]) -> int:
         same_payload = json.loads(same.stdout)
         assert same_payload["result"] == "PASS", same_payload
         assert same_payload["stages"][-1]["reason"] == "k2_equivalence_pass", same_payload
+
+        btf_guard = run_check(
+            repo_root, ret0_btf_o, ret0_btf_o, prevail, k2_equiv, k2_root
+        )
+        assert btf_guard.returncode == 1, (btf_guard.stdout, btf_guard.stderr)
+        btf_guard_payload = json.loads(btf_guard.stdout)
+        assert btf_guard_payload["result"] == "UNKNOWN", btf_guard_payload
+        btf_guard_stages = [
+            (stage["name"], stage["reason"]) for stage in btf_guard_payload["stages"]
+        ]
+        assert ("k2_btf_old", "btf_section_present") in btf_guard_stages, (
+            btf_guard_payload
+        )
+        assert ("k2_map_env", "btf_map_metadata_not_extracted") in btf_guard_stages, (
+            btf_guard_payload
+        )
+        assert "equivalence" not in [
+            stage["name"] for stage in btf_guard_payload["stages"]
+        ], btf_guard_payload
 
         rewrite = run_check(
             repo_root,

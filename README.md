@@ -229,8 +229,10 @@ stack store/load), and a return-value counterexample. The raw K2 backend smoke
 also covers explicit map metadata and packet-input metadata with supported
 PASS/FAIL cases, and the ELF-section integration test covers those explicit
 metadata paths plus automatic legacy `maps` extraction and XDP packet-desc
-inference through `ebpf-tv check`. CI also runs the K2 XDP example script so the
-public example path stays in sync with the tested CLI behavior.
+inference through `ebpf-tv check`, and verifies that a clang-produced `.BTF`
+object returns `UNKNOWN` before K2 when no legacy map metadata is available. CI
+also runs the K2 XDP example script so the public example path stays in sync
+with the tested CLI behavior.
 
 The optional `PREVAIL Smoke` workflow can be run manually from GitHub Actions to
 verify the pinned real PREVAIL build and object/YAML fixtures.

@@ -167,8 +167,8 @@ Current scope:
 - ELF-section frontend coverage for explicit map metadata, automatic legacy map
   extraction, explicit old/new description matching and mismatch, old/new section
   overrides, section-inferred program-type mismatch, section-inferred packet
-  metadata, BTF-only map metadata guard, and packet-input metadata through
-  `ebpf-tv check --equiv-backend k2`
+  metadata, BTF-only map metadata guard on a clang-produced `.BTF` object, and
+  packet-input metadata through `ebpf-tv check --equiv-backend k2`
 
 Known gaps:
 

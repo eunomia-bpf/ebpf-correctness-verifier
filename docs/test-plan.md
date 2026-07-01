@@ -58,7 +58,7 @@ a separate job so the default local `make test` gate stays network-free.
 | Upstream Z3 release | `make test-k2-z3-release`, CI `upstream-z3` job | the vendored K2 wrapper builds and runs against the pinned official Z3 release, not only distro `libz3-dev` | sha256-verified Z3 4.16.0 binary release, K2 CTest suite, wrapper version JSON |
 | ELF adapter | `tests/k2_cli_integration.py` via CTest | `ebpf-tv` extracts ELF sections, generates default, section-inferred, auto-extracted legacy, or explicit K2 metadata, and invokes K2 through the single CLI | byte-identical pass, ALU rewrite pass, stack-memory rewrite pass, map update/lookup pass/fail with explicit map metadata, map rewrite pass with auto-extracted legacy map metadata, XDP packet-input inference, packet read pass/fail with explicit packet metadata, return-value fail |
 | Section metadata precheck | `tests/test_cli.py` | explicit old/new section overrides route PREVAIL/K2 to the right ELF sections and reject known incompatible program types before solving | external backend old/new section placeholders, compatible XDP section override pass, XDP-vs-tracepoint mismatch returns `FAIL`, unclassified section mismatch returns `UNKNOWN` before K2 is invoked |
-| BTF metadata guard | `tests/test_cli.py` | K2 auto-generated map environments do not silently ignore modern BTF-only map metadata | no legacy `maps` section plus present `.BTF` returns `UNKNOWN` before K2 is invoked |
+| BTF metadata guard | `tests/test_cli.py`, `tests/k2_cli_integration.py` via CTest | K2 auto-generated map environments do not silently ignore modern BTF-only map metadata | fake objcopy unit coverage plus clang-produced `.BTF` object returns `UNKNOWN` before K2 is invoked |
 | K2 metadata precheck | `tests/test_cli.py` | explicit old/new K2 program descriptions are checked before equivalence solving | byte-identical `--k2-old-desc`/`--k2-new-desc` continues to K2, mismatch returns `FAIL` before K2 is invoked |
 | Public examples | `make test-example-k2-xdp` | documented CLI examples remain runnable through the same tested K2 backend | non-identical equivalent XDP objects with fake PREVAIL and K2 equivalence PASS |
 | CI | `.github/workflows/ci.yml` | fresh Ubuntu build installs dependencies and runs the same local gate | Python 3 packaging tools, clang/llvm, CMake, libz3-dev |
@@ -122,7 +122,8 @@ semantic counterexample for each supported slice.
 The K2 frontend currently has CI coverage for:
 
 - no legacy `maps` section plus present `.BTF` metadata returns `UNKNOWN` before
-  K2 is invoked
+  K2 is invoked, including a clang-produced BTF object in the ELF integration
+  test
 
 This prevents the auto-generated empty-map environment from claiming support for
 modern libbpf/BTF map metadata before a real extractor exists.
