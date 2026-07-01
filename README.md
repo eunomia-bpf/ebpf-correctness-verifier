@@ -232,6 +232,7 @@ empty map environment.
 - [Backend contract](docs/backend-contract.md)
 - [Test plan](docs/test-plan.md)
 - [Reproduction notes](docs/reproduction-notes.md)
+- [Contributing](CONTRIBUTING.md)
 
 ## CI
 
