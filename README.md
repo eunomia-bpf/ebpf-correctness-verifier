@@ -156,6 +156,11 @@ smoke test and a K2-derived raw-instruction equivalence backend against the
 system Z3 library, avoiding K2's old requirement for a sibling
 `../z3/build/config.mk` checkout.
 
+Z3 and PREVAIL are intentionally not default submodules. Z3 is consumed as a
+system solver library (`libz3-dev` in CI), while PREVAIL is consumed as an
+external CLI through `--prevail-bin` with an optional pinned smoke workflow.
+See [Dependency policy](docs/dependency-policy.md) for the maintainer contract.
+
 The v0 rule is:
 
 ```text
@@ -178,6 +183,7 @@ deliberately small: XDP sections default to K2 packet input with a bounded
 ## Documents
 
 - [K2 XDP example](examples/k2-xdp/README.md)
+- [Dependency policy](docs/dependency-policy.md)
 - [Research survey](docs/research-survey.md)
 - [Reuse matrix](docs/reuse-matrix.md)
 - [Heimdall notes](docs/heimdall-notes.md)

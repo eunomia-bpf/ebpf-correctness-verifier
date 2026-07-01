@@ -1,6 +1,6 @@
 # Reuse Matrix
 
-Last checked: 2026-06-30.
+Last checked: 2026-07-01.
 
 | Project | Role | Reuse value | Caveat |
 | --- | --- | --- | --- |
@@ -51,6 +51,11 @@ design, but without a reusable release it should influence the agent feedback
 loop and evaluation, not replace K2/PREVAIL as the first implementation base.
 Build the maintained project around adapters and reproducible experiments before
 writing new verifier or symbolic-execution code.
+
+The dependency policy is intentionally asymmetric: vendor K2 because this
+repository modernizes and wraps its internals; keep Z3 as a system solver
+library; keep PREVAIL as an external CLI plus optional pinned smoke checkout.
+See [Dependency policy](dependency-policy.md).
 
 Port or wrap only the parts that remain useful:
 
