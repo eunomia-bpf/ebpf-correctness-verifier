@@ -124,6 +124,8 @@ Current scope:
   semantic FAIL
 - raw-backend smoke coverage for explicit map metadata and packet-input
   metadata, including supported PASS and FAIL cases
+- ELF-section frontend coverage for explicit map metadata and packet-input
+  metadata through `ebpf-tv check --equiv-backend k2`
 
 Known gaps:
 

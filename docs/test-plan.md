@@ -38,7 +38,7 @@ access and upstream build stability.
 | CLI orchestration | `tests/test_cli.py` | `ebpf-tv` combines backend results as `FAIL > UNKNOWN > PASS` | identity pass, non-identical unknown, PREVAIL reject, missing PREVAIL, external fail |
 | K2 backend contract | `tests/k2_equiv_smoke.py` via CTest | `k2_ebpf_equiv` returns normalized exit codes and JSON | byte-identical pass, return-value fail, stack store/load equivalent pass, map update/lookup pass/fail, packet read pass/fail |
 | K2 instruction semantics | vendored `k2_ebpf_inst_codegen_test` via CTest | selected K2 eBPF instruction, memory, map-helper, map-equivalence, and packet formulas still build and run against modern system Z3 | inherited K2 smoke cases |
-| ELF adapter | `tests/k2_cli_integration.py` via CTest | `ebpf-tv` extracts ELF sections, generates default K2 metadata, and invokes K2 through the single CLI | byte-identical pass, ALU rewrite pass, stack-memory rewrite pass, return-value fail |
+| ELF adapter | `tests/k2_cli_integration.py` via CTest | `ebpf-tv` extracts ELF sections, generates default or explicit K2 metadata, and invokes K2 through the single CLI | byte-identical pass, ALU rewrite pass, stack-memory rewrite pass, map update/lookup pass/fail with explicit map metadata, packet read pass/fail with explicit packet metadata, return-value fail |
 | CI | `.github/workflows/ci.yml` | fresh Ubuntu build installs dependencies and runs the same local gate | Python 3, clang/llvm, CMake, libz3-dev |
 | Optional PREVAIL smoke | `make test-prevail-smoke`, `.github/workflows/prevail-smoke.yml` | real PREVAIL build and sample fixtures still work at the pinned commit | `add.yaml`, `map.yaml`, `minimal.bpf.o` |
 
@@ -72,9 +72,9 @@ The K2 equivalence path currently has CI coverage for:
 
 The first checks adapter plumbing. The second checks non-identical ALU
 equivalence. The third checks stack-memory modeling. The map and packet fixtures
-exercise K2 metadata parsing and the helper/memory models. These are
-intentionally small fixtures because they must remain stable across hosts and
-solver versions.
+exercise K2 metadata parsing, the helper/memory models, and the `ebpf-tv check`
+ELF-section frontend path. These are intentionally small fixtures because they
+must remain stable across hosts and solver versions.
 
 ## Current Negative Fixtures
 
@@ -108,8 +108,8 @@ The following are intentionally not claimed yet:
 - automatic map metadata extraction from ELF/BTF
 - CO-RE relocation modeling
 - helper side effects beyond K2's inherited smoke tests
-- map update/delete equivalence through `ebpf-tv check`
-- packet/context memory equivalence through `ebpf-tv check`
+- map delete equivalence through `ebpf-tv check`
+- broader packet/context memory equivalence through `ebpf-tv check`
 - mutable global equivalence
 - ringbuf/perf-event output sink tracking
 - atomicity-preservation structural checks

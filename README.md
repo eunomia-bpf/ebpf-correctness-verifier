@@ -175,7 +175,8 @@ checks byte-identical objects, non-identical equivalent rewrites
 (`r0 = 1` versus `r0 = 0; r0 += 1`, and direct register return versus
 stack store/load), and a return-value counterexample. The raw K2 backend smoke
 also covers explicit map metadata and packet-input metadata with supported
-PASS/FAIL cases.
+PASS/FAIL cases, and the ELF-section integration test covers those explicit
+metadata paths through `ebpf-tv check`.
 
 The optional `PREVAIL Smoke` workflow can be run manually from GitHub Actions to
 verify the pinned real PREVAIL build and object/YAML fixtures.

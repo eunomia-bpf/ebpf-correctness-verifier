@@ -210,8 +210,9 @@ as separate feedback classes.
    through the same `make test` entrypoint used locally.
 6. In progress: add real object fixtures and mutation tests. CI now covers a
    clang-produced object, ALU and stack-memory equivalent section rewrites, a
-   return-value counterexample, and raw K2 map/packet PASS/FAIL fixtures.
-   Frontend-level map/packet object fixtures remain. Track coverage in
+   return-value counterexample, raw K2 map/packet PASS/FAIL fixtures, and
+   `ebpf-tv check` ELF-section fixtures with explicit map/packet metadata.
+   Automatic map/desc/BTF/CO-RE extraction remains. Track coverage in
    `docs/test-plan.md`.
 7. In progress: add K2 environment handling. A no-map constant-input default is
    generated automatically; map/desc/BTF/CO-RE extraction remains.
