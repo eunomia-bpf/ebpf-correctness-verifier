@@ -23,6 +23,15 @@ UNKNOWN if no stage is FAIL and at least one stage is UNKNOWN
 PASS    only if every stage is PASS
 ```
 
+The supported backend slice is also exposed through:
+
+```bash
+ebpf-tv capabilities
+```
+
+The JSON output is part of the CLI contract for users, agents, and tests that
+need to distinguish supported semantics from known gaps.
+
 ## PREVAIL Backend
 
 Purpose:

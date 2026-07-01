@@ -13,6 +13,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Iterable
 
+from . import __version__
+
 
 PASS = "PASS"
 FAIL = "FAIL"
@@ -67,6 +69,116 @@ class K2MapSpec:
             f"value_size = {self.value_size}, max_entries = {self.max_entries}, "
             f"fd = {index} }}\n"
         )
+
+
+def build_capabilities() -> dict[str, object]:
+    return {
+        "version": __version__,
+        "result_model": {
+            "values": [PASS, FAIL, UNKNOWN],
+            "precedence": [FAIL, UNKNOWN, PASS],
+        },
+        "pass_rule": [
+            "PREVAIL(old) PASS",
+            "PREVAIL(new) PASS",
+            "equivalence(old, new) PASS",
+        ],
+        "dependency_policy": {
+            "prevail": {
+                "mode": "external",
+                "interface": "--prevail-bin",
+                "default_submodule": False,
+            },
+            "k2": {
+                "mode": "vendored",
+                "path": "third_party/k2-superopt",
+                "modernization": "root CMake build against system Z3",
+            },
+            "z3": {
+                "mode": "system",
+                "package": "libz3-dev",
+                "default_submodule": False,
+            },
+        },
+        "equivalence_backends": {
+            "identity": {
+                "status": "stable",
+                "scope": ["byte-identical object PASS", "non-identical object UNKNOWN"],
+            },
+            "external": {
+                "status": "stable",
+                "exit_codes": {"0": PASS, "1": FAIL, "2": UNKNOWN},
+            },
+            "k2": {
+                "status": "experimental-supported-slice",
+                "features": [
+                    "raw .ins equivalence through k2_ebpf_equiv",
+                    "ELF section extraction through llvm-objcopy or objcopy",
+                    "legacy SEC(\"maps\") struct bpf_map_def extraction",
+                    "explicit K2 .maps and .desc overrides",
+                    "generated empty map environment",
+                    "XDP section prefix to packet-input desc inference",
+                    "constant-input desc generation for unknown sections",
+                    "shared old/new K2 environment",
+                    "system Z3 library integration",
+                ],
+                "tested_positive_cases": [
+                    "byte-identical programs",
+                    "ALU rewrite",
+                    "stack store/load rewrite",
+                    "map update/lookup rewrite",
+                    "packet byte read equivalence",
+                ],
+                "tested_negative_cases": [
+                    "different return constants",
+                    "map update/lookup counterexample",
+                    "legacy map metadata mismatch",
+                    "different packet byte offsets",
+                ],
+            },
+        },
+        "known_gaps": [
+            "BTF .maps extraction",
+            "CO-RE relocation modeling",
+            "loader-derived program/context metadata",
+            "kernel verifier load gate",
+            "BPF_PROG_RUN differential execution",
+            "helper side effects beyond current K2 fixtures",
+            "mutable global equivalence",
+            "ringbuf/perf-event output sinks",
+            "atomicity-preservation structural checks",
+            "counterexample minimization",
+        ],
+        "docs": {
+            "dependency_policy": "docs/dependency-policy.md",
+            "backend_contract": "docs/backend-contract.md",
+            "test_plan": "docs/test-plan.md",
+        },
+    }
+
+
+def capabilities(args: argparse.Namespace) -> int:
+    data = build_capabilities()
+    if args.output == "json":
+        print(json.dumps(data, indent=2, sort_keys=True))
+    else:
+        dependencies = data["dependency_policy"]
+        backends = data["equivalence_backends"]
+        print(f"ebpf-tv {data['version']}")
+        print("PASS rule: PREVAIL(old) PASS AND PREVAIL(new) PASS AND equivalence PASS")
+        print(
+            "Dependencies: "
+            f"PREVAIL={dependencies['prevail']['mode']}, "
+            f"K2={dependencies['k2']['mode']}, "
+            f"Z3={dependencies['z3']['mode']}"
+        )
+        print("Equivalence backends:")
+        for name, backend in backends.items():
+            print(f"  {name}: {backend['status']}")
+        print("Known gaps:")
+        for gap in data["known_gaps"]:
+            print(f"  - {gap}")
+    return 0
 
 
 def run_command(command: list[str], timeout: int) -> StageResult:
@@ -751,6 +863,13 @@ def build_parser() -> argparse.ArgumentParser:
     selftest_parser.add_argument("--k2-root")
     selftest_parser.add_argument("--timeout", type=int, default=120)
     selftest_parser.set_defaults(func=selftest)
+
+    capabilities_parser = subparsers.add_parser(
+        "capabilities",
+        help="print the supported dependency, backend, and test-coverage slice",
+    )
+    capabilities_parser.add_argument("--output", choices=["text", "json"], default="json")
+    capabilities_parser.set_defaults(func=capabilities)
 
     return parser
 

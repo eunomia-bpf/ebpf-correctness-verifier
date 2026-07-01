@@ -36,6 +36,13 @@ python3 -m pip install -e .
 ebpf-tv --help
 ```
 
+Inspect the currently supported dependency policy, backend slice, and known
+gaps:
+
+```bash
+ebpf-tv capabilities
+```
+
 Run the full local test suite:
 
 ```bash

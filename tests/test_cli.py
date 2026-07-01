@@ -701,6 +701,39 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result["result"], "PASS")
             self.assertEqual(result["stages"][1]["reason"], "k2_equiv_pass_fail_smoke")
 
+    def test_capabilities_json_describes_dependency_policy(self) -> None:
+        completed = run_cli(["capabilities"])
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        result = json.loads(completed.stdout)
+        self.assertEqual(result["version"], "0.1.0")
+        self.assertEqual(result["dependency_policy"]["prevail"]["mode"], "external")
+        self.assertFalse(result["dependency_policy"]["prevail"]["default_submodule"])
+        self.assertEqual(result["dependency_policy"]["k2"]["mode"], "vendored")
+        self.assertEqual(result["dependency_policy"]["z3"]["mode"], "system")
+        self.assertFalse(result["dependency_policy"]["z3"]["default_submodule"])
+        self.assertIn(
+            "legacy SEC(\"maps\") struct bpf_map_def extraction",
+            result["equivalence_backends"]["k2"]["features"],
+        )
+        self.assertIn(
+            "XDP section prefix to packet-input desc inference",
+            result["equivalence_backends"]["k2"]["features"],
+        )
+        self.assertIn("BTF .maps extraction", result["known_gaps"])
+        self.assertIn("CO-RE relocation modeling", result["known_gaps"])
+
+    def test_capabilities_text_output(self) -> None:
+        completed = run_cli(["capabilities", "--output", "text"])
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("ebpf-tv 0.1.0", completed.stdout)
+        self.assertIn("PREVAIL=external", completed.stdout)
+        self.assertIn("K2=vendored", completed.stdout)
+        self.assertIn("Z3=system", completed.stdout)
+        self.assertIn("k2: experimental-supported-slice", completed.stdout)
+        self.assertIn("BTF .maps extraction", completed.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

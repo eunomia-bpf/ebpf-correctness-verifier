@@ -12,6 +12,7 @@ test-package:
 	build/package-smoke-venv/bin/python -m pip install --no-build-isolation --no-deps .
 	build/package-smoke-venv/bin/ebpf-tv --help >/dev/null
 	build/package-smoke-venv/bin/ebpf-tv check --help >/dev/null
+	build/package-smoke-venv/bin/ebpf-tv capabilities >/dev/null
 
 test-k2-smoke:
 	cmake -S . -B build
