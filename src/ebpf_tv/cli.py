@@ -88,6 +88,11 @@ def build_capabilities() -> dict[str, object]:
                 "mode": "external",
                 "interface": "--prevail-bin",
                 "default_submodule": False,
+                "optional_smoke": "make test-prevail-smoke",
+                "optional_smoke_scope": (
+                    "real PREVAIL YAML/object smoke plus ebpf-tv check on a "
+                    "minimal object"
+                ),
             },
             "k2": {
                 "mode": "vendored",

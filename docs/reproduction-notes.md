@@ -104,7 +104,9 @@ make test-prevail-smoke
 
 This clones the pinned PREVAIL commit into `.cache/prevail` by default, applies
 the compatibility patch above, builds `prevail` and `run_yaml`, and runs
-`add.yaml`, `map.yaml`, and the minimal object smoke.
+`add.yaml`, `map.yaml`, the minimal object smoke, and an `ebpf-tv check`
+old/new identity pass over the same minimal object using the real PREVAIL
+binary.
 
 Conclusion:
 

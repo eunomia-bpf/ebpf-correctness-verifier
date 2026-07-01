@@ -74,6 +74,36 @@ run_prevail_smoke() {
   grep -q '^PASS:' "$output_file"
 }
 
+run_ebpf_tv_prevail_smoke() {
+  local prevail="$PREVAIL_DIR/bin/prevail"
+  local object_fixture="$PREVAIL_DIR/ebpf-samples/libbpf-bootstrap/minimal.bpf.o"
+  local output_file
+  output_file=$(mktemp)
+  trap 'rm -f "$output_file"' RETURN
+
+  PYTHONPATH="$REPO_ROOT/src" python3 -m ebpf_tv check \
+    "$object_fixture" \
+    "$object_fixture" \
+    --section tp/syscalls/sys_enter_write \
+    --prevail-bin "$prevail" \
+    >"$output_file"
+
+  python3 - "$output_file" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text())
+assert payload["result"] == "PASS", payload
+stages = {stage["name"]: stage for stage in payload["stages"]}
+assert stages["prevail_old"]["reason"] == "prevail_pass", payload
+assert stages["prevail_new"]["reason"] == "prevail_pass", payload
+assert stages["equivalence"]["reason"] == "byte_identical", payload
+PY
+
+  echo "ebpf-tv PREVAIL integration smoke passed"
+}
+
 clone_or_update_prevail
 git -C "$PREVAIL_DIR" submodule update --init --recursive
 patch_prevail_cli_version
@@ -82,5 +112,6 @@ cmake -S "$PREVAIL_DIR" -B "$PREVAIL_BUILD_DIR" -DCMAKE_BUILD_TYPE=Release
 cmake --build "$PREVAIL_BUILD_DIR" --target prevail-cli run_yaml -j "$JOBS"
 
 run_prevail_smoke
+run_ebpf_tv_prevail_smoke
 
 echo "PREVAIL smoke passed at $PREVAIL_COMMIT"

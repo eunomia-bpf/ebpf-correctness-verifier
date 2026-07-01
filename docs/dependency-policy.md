@@ -46,8 +46,9 @@ make test-prevail-smoke
 
 That target clones a pinned PREVAIL commit into `.cache/prevail` by default,
 applies the compatibility patch documented in `docs/reproduction-notes.md`,
-builds `prevail` and `run_yaml`, and runs a small smoke suite. This keeps the
-normal checkout, `make test`, and CI path lightweight.
+builds `prevail` and `run_yaml`, runs a small smoke suite, and verifies that
+`ebpf-tv check` can consume real PREVAIL output on PREVAIL's minimal object
+fixture. This keeps the normal checkout, `make test`, and CI path lightweight.
 
 ## When A New Vendored Dependency Is Acceptable
 

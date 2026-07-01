@@ -123,9 +123,10 @@ make test-prevail-smoke
 
 This clones `vbpf/prevail` outside the tracked source tree, applies a small
 `PREVAIL_VERSION_STRING` CLI compatibility patch needed by current compilers,
-builds `prevail` and `run_yaml`, then runs YAML and object smoke tests. It is
-kept out of the default `make test` gate because it depends on network access
-and upstream build behavior.
+builds `prevail` and `run_yaml`, runs YAML and object smoke tests, then runs
+`ebpf-tv check` on PREVAIL's minimal object fixture with the real PREVAIL
+binary. It is kept out of the default `make test` gate because it depends on
+network access and upstream build behavior.
 
 For source-tree development without installing the package, use
 `PYTHONPATH=src python3 -m ebpf_tv ...`.

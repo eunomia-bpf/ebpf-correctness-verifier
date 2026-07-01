@@ -709,6 +709,14 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result["version"], "0.1.0")
         self.assertEqual(result["dependency_policy"]["prevail"]["mode"], "external")
         self.assertFalse(result["dependency_policy"]["prevail"]["default_submodule"])
+        self.assertEqual(
+            result["dependency_policy"]["prevail"]["optional_smoke"],
+            "make test-prevail-smoke",
+        )
+        self.assertIn(
+            "ebpf-tv check on a minimal object",
+            result["dependency_policy"]["prevail"]["optional_smoke_scope"],
+        )
         self.assertEqual(result["dependency_policy"]["k2"]["mode"], "vendored")
         self.assertEqual(result["dependency_policy"]["z3"]["mode"], "system")
         self.assertFalse(result["dependency_policy"]["z3"]["default_submodule"])

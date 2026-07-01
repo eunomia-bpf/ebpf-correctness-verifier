@@ -53,6 +53,11 @@ The backend is considered:
 - `UNKNOWN` when the requested section/function cannot be found or the tool is
   unavailable
 
+The optional `make test-prevail-smoke` gate builds a pinned upstream PREVAIL
+checkout and runs `ebpf-tv check` against PREVAIL's minimal object fixture with
+the real PREVAIL binary. This keeps the default test suite lightweight while
+still protecting the project-owned adapter against real PREVAIL output drift.
+
 ## Equivalence Backend
 
 The default `identity` backend is only a smoke backend:

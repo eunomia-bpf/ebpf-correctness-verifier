@@ -30,9 +30,10 @@ make test-prevail-smoke
 
 It clones a pinned upstream PREVAIL checkout, applies the local CLI
 compatibility patch documented in `docs/reproduction-notes.md`, builds
-`prevail` and `run_yaml`, and runs selected YAML and object smoke tests. It is
-available as a manual GitHub Actions workflow because it depends on network
-access and upstream build stability.
+`prevail` and `run_yaml`, runs selected YAML and object smoke tests, and then
+runs `ebpf-tv check` against PREVAIL's minimal object fixture with the real
+PREVAIL binary. It is available as a manual GitHub Actions workflow because it
+depends on network access and upstream build stability.
 
 The upstream Z3 compatibility gate is:
 
@@ -58,7 +59,7 @@ a separate job so the default local `make test` gate stays network-free.
 | ELF adapter | `tests/k2_cli_integration.py` via CTest | `ebpf-tv` extracts ELF sections, generates default, section-inferred, auto-extracted legacy, or explicit K2 metadata, and invokes K2 through the single CLI | byte-identical pass, ALU rewrite pass, stack-memory rewrite pass, map update/lookup pass/fail with explicit map metadata, map rewrite pass with auto-extracted legacy map metadata, XDP packet-input inference, packet read pass/fail with explicit packet metadata, return-value fail |
 | Public examples | `make test-example-k2-xdp` | documented CLI examples remain runnable through the same tested K2 backend | non-identical equivalent XDP objects with fake PREVAIL and K2 equivalence PASS |
 | CI | `.github/workflows/ci.yml` | fresh Ubuntu build installs dependencies and runs the same local gate | Python 3 packaging tools, clang/llvm, CMake, libz3-dev |
-| Optional PREVAIL smoke | `make test-prevail-smoke`, `.github/workflows/prevail-smoke.yml` | real PREVAIL build and sample fixtures still work at the pinned commit | `add.yaml`, `map.yaml`, `minimal.bpf.o` |
+| Optional PREVAIL smoke | `make test-prevail-smoke`, `.github/workflows/prevail-smoke.yml` | real PREVAIL build, sample fixtures, and `ebpf-tv check` integration still work at the pinned commit | `add.yaml`, `map.yaml`, direct `minimal.bpf.o` PREVAIL pass, `ebpf-tv check minimal.bpf.o minimal.bpf.o` PASS |
 
 ## Heimdall-Derived Acceptance Lessons
 
@@ -121,8 +122,9 @@ CI currently tests the PREVAIL adapter contract with fake PREVAIL commands:
 Actual PREVAIL build and sample-object reproduction are covered by the optional
 `make test-prevail-smoke` target and manual `PREVAIL Smoke` workflow. This is a
 reproducibility gate for PREVAIL integration, not part of the default CI gate.
-End-to-end safety coverage still requires wiring real PREVAIL results into
-regular old/new object checks.
+The optional gate also runs `ebpf-tv check` on the same minimal object as both
+old and new input, so the project-owned PREVAIL adapter is exercised against
+real PREVAIL output instead of only fake unit-test commands.
 
 ## Missing Coverage
 
