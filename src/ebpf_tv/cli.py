@@ -131,6 +131,7 @@ def build_capabilities() -> dict[str, object]:
                     "old/new ELF section overrides",
                     "section-inferred program-type compatibility precheck",
                     "legacy SEC(\"maps\") struct bpf_map_def extraction",
+                    "BTF presence guard for generated empty map environments",
                     "explicit K2 .maps and .desc overrides",
                     "explicit old/new K2 .desc compatibility precheck",
                     "generated empty map environment",
@@ -154,6 +155,9 @@ def build_capabilities() -> dict[str, object]:
                     "legacy map metadata mismatch",
                     "program description metadata mismatch",
                     "different packet byte offsets",
+                ],
+                "tested_conservative_unknown_cases": [
+                    "BTF map metadata without legacy maps",
                 ],
             },
         },
@@ -540,6 +544,39 @@ def run_legacy_map_extract(
     return stage, maps
 
 
+def run_btf_section_probe(
+    name: str,
+    obj: Path,
+    output: Path,
+    objcopy_bin: str,
+    timeout: int,
+) -> tuple[StageResult, bool]:
+    tool = resolve_objcopy(objcopy_bin)
+    if tool is None:
+        return (
+            StageResult(name=name, result=UNKNOWN, reason="objcopy_not_found"),
+            False,
+        )
+
+    stage = run_command(
+        [tool, f"--dump-section=.BTF={output}", str(obj)],
+        timeout,
+    )
+    stage.name = name
+    if stage.exit_code != 0:
+        stage.result = PASS
+        stage.reason = "btf_section_not_found"
+        return stage, False
+    if output.exists() and output.stat().st_size > 0:
+        stage.result = PASS
+        stage.reason = "btf_section_present"
+        return stage, True
+
+    stage.result = PASS
+    stage.reason = "btf_section_empty"
+    return stage, False
+
+
 def combine(stages: Iterable[StageResult]) -> str:
     results = [stage.result for stage in stages]
     if FAIL in results:
@@ -684,6 +721,33 @@ def run_k2_elf_equivalence(
                     )
                 )
                 return stages
+            if not old_maps and not new_maps:
+                old_btf_stage, old_has_btf = run_btf_section_probe(
+                    "k2_btf_old",
+                    old,
+                    tmp_path / "old.btf.raw",
+                    objcopy_bin,
+                    timeout,
+                )
+                new_btf_stage, new_has_btf = run_btf_section_probe(
+                    "k2_btf_new",
+                    new,
+                    tmp_path / "new.btf.raw",
+                    objcopy_bin,
+                    timeout,
+                )
+                stages.extend([old_btf_stage, new_btf_stage])
+                if combine(stages) != PASS:
+                    return stages
+                if old_has_btf or new_has_btf:
+                    stages.append(
+                        StageResult(
+                            name="k2_map_env",
+                            result=UNKNOWN,
+                            reason="btf_map_metadata_not_extracted",
+                        )
+                    )
+                    return stages
             write_k2_maps(map_path, old_maps)
         if generated_desc:
             input_type_name, max_pkt_size = resolve_k2_desc_inputs(
@@ -972,7 +1036,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--k2-map",
         help=(
             "K2 map metadata file; omitted means auto-extract legacy ELF "
-            "maps when present, otherwise generate an empty map environment"
+            "maps when present, return UNKNOWN for BTF-only metadata, "
+            "otherwise generate an empty map environment"
         ),
     )
     check_parser.add_argument(

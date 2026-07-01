@@ -200,7 +200,9 @@ provide separate `--k2-old-desc` and `--k2-new-desc` metadata files, `ebpf-tv`
 checks that the explicit program descriptions match before invoking K2. When
 `--old-section` and `--new-section` differ, `ebpf-tv` also checks compatible
 program types for known section prefixes such as XDP and tracepoints before
-extracting bytecode.
+extracting bytecode. If automatic map extraction finds no legacy `maps` section
+but detects `.BTF`, the K2 backend returns `UNKNOWN` instead of assuming an
+empty map environment.
 
 ## Documents
 
@@ -240,5 +242,5 @@ adapter, a conservative equivalence backend contract, vendored K2 source, and a
 modern-Z3 K2 equivalence backend with unit tests and an ELF-section integration
 smoke test. It is not yet a complete CO-RE/BTF-aware object equivalence checker;
 automatic map extraction currently supports only legacy `SEC("maps")`
-`bpf_map_def` records, and automatic `.desc` generation only handles a small
-section-prefix slice.
+`bpf_map_def` records, BTF-only map metadata is detected as unsupported, and
+automatic `.desc` generation only handles a small section-prefix slice.

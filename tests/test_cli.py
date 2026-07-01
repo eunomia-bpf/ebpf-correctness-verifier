@@ -262,6 +262,7 @@ class CliTests(unittest.TestCase):
                 section="${spec%%=*}"
                 out="${spec#*=}"
                 [ "$section" = "maps" ] && exit 1
+                [ "$section" = ".BTF" ] && exit 1
                 case "$2" in
                   *old.o) printf old > "$out" ;;
                   *new.o) printf new > "$out" ;;
@@ -318,6 +319,83 @@ class CliTests(unittest.TestCase):
             )
             self.assertEqual(result["stages"][-1]["reason"], "k2_equivalence_pass")
 
+    def test_k2_equivalence_backend_returns_unknown_for_btf_without_legacy_maps(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            old = tmp_path / "old.o"
+            new = tmp_path / "new.o"
+            old.write_bytes(b"old-elf")
+            new.write_bytes(b"new-elf")
+            marker = tmp_path / "k2-invoked"
+            prevail = make_executable(
+                tmp_path / "prevail",
+                """\
+                #!/usr/bin/env sh
+                echo "PASS: $2/func"
+                """,
+            )
+            objcopy = make_executable(
+                tmp_path / "objcopy",
+                """\
+                #!/usr/bin/env sh
+                spec="${1#--dump-section=}"
+                section="${spec%%=*}"
+                out="${spec#*=}"
+                [ "$section" = "maps" ] && exit 1
+                [ "$section" = ".BTF" ] && printf btf > "$out" && exit 0
+                printf section > "$out"
+                """,
+            )
+            k2_equiv = make_executable(
+                tmp_path / "k2_equiv",
+                f"""\
+                #!/usr/bin/env sh
+                touch "{marker}"
+                exit 0
+                """,
+            )
+
+            completed = run_cli(
+                [
+                    "check",
+                    str(old),
+                    str(new),
+                    "--section",
+                    "xdp",
+                    "--prevail-bin",
+                    str(prevail),
+                    "--equiv-backend",
+                    "k2",
+                    "--k2-equiv",
+                    str(k2_equiv),
+                    "--k2-root",
+                    str(tmp_path),
+                    "--objcopy-bin",
+                    str(objcopy),
+                ]
+            )
+
+            self.assertEqual(completed.returncode, 1)
+            self.assertFalse(marker.exists())
+            result = json.loads(completed.stdout)
+            self.assertEqual(result["result"], "UNKNOWN")
+            self.assertIn(
+                ("k2_maps_old", "legacy_maps_not_found"),
+                [(stage["name"], stage["reason"]) for stage in result["stages"]],
+            )
+            self.assertIn(
+                ("k2_btf_old", "btf_section_present"),
+                [(stage["name"], stage["reason"]) for stage in result["stages"]],
+            )
+            self.assertIn(
+                ("k2_map_env", "btf_map_metadata_not_extracted"),
+                [(stage["name"], stage["reason"]) for stage in result["stages"]],
+            )
+            self.assertNotIn(
+                "equivalence",
+                [stage["name"] for stage in result["stages"]],
+            )
+
     def test_k2_equivalence_backend_auto_infers_xdp_packet_environment(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -338,6 +416,7 @@ class CliTests(unittest.TestCase):
                 section="${spec%%=*}"
                 out="${spec#*=}"
                 [ "$section" = "maps" ] && exit 1
+                [ "$section" = ".BTF" ] && exit 1
                 printf section > "$out"
                 """,
             )
@@ -459,6 +538,7 @@ class CliTests(unittest.TestCase):
                 section="${spec%%=*}"
                 out="${spec#*=}"
                 [ "$section" = "maps" ] && exit 1
+                [ "$section" = ".BTF" ] && exit 1
                 case "$section:$2" in
                   xdp:*old.o) printf section > "$out" ;;
                   xdp.frags:*new.o) printf section > "$out" ;;
@@ -590,6 +670,7 @@ class CliTests(unittest.TestCase):
                 section="${spec%%=*}"
                 out="${spec#*=}"
                 [ "$section" = "maps" ] && exit 1
+                [ "$section" = ".BTF" ] && exit 1
                 printf section > "$out"
                 """,
             )
@@ -728,6 +809,7 @@ class CliTests(unittest.TestCase):
                 section="${spec%%=*}"
                 out="${spec#*=}"
                 [ "$section" = "maps" ] && exit 1
+                [ "$section" = ".BTF" ] && exit 1
                 printf section > "$out"
                 """,
             )
@@ -1151,6 +1233,10 @@ class CliTests(unittest.TestCase):
             result["equivalence_backends"]["k2"]["features"],
         )
         self.assertIn(
+            "BTF presence guard for generated empty map environments",
+            result["equivalence_backends"]["k2"]["features"],
+        )
+        self.assertIn(
             "old/new ELF section overrides",
             result["equivalence_backends"]["k2"]["features"],
         )
@@ -1169,6 +1255,10 @@ class CliTests(unittest.TestCase):
         self.assertIn(
             "explicit old/new K2 .desc compatibility precheck",
             result["equivalence_backends"]["k2"]["features"],
+        )
+        self.assertIn(
+            "BTF map metadata without legacy maps",
+            result["equivalence_backends"]["k2"]["tested_conservative_unknown_cases"],
         )
         self.assertIn("BTF .maps extraction", result["known_gaps"])
         self.assertIn("CO-RE relocation modeling", result["known_gaps"])

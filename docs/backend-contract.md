@@ -139,8 +139,10 @@ Current scope:
   different sections return `UNKNOWN` instead of guessing a shared environment
 - automatic K2 `.maps` generation from matching legacy ELF `maps` sections
   containing `struct bpf_map_def` records when `--k2-map` is omitted
-- generated empty-map environment when no legacy `maps` section exists and
-  `--k2-map` is omitted
+- generated empty-map environment when no legacy `maps` section exists, no
+  `.BTF` section is present, and `--k2-map` is omitted
+- `UNKNOWN` instead of generated empty maps when no legacy `maps` section exists
+  but `.BTF` metadata is present
 - generated `.desc` metadata when `--k2-desc` is omitted; `--k2-input-type
   auto` currently maps XDP section prefixes to K2 packet input and unknown
   sections to constant input
@@ -165,7 +167,8 @@ Current scope:
 - ELF-section frontend coverage for explicit map metadata, automatic legacy map
   extraction, explicit old/new description matching and mismatch, old/new section
   overrides, section-inferred program-type mismatch, section-inferred packet
-  metadata, and packet-input metadata through `ebpf-tv check --equiv-backend k2`
+  metadata, BTF-only map metadata guard, and packet-input metadata through
+  `ebpf-tv check --equiv-backend k2`
 
 Known gaps:
 
