@@ -41,7 +41,7 @@ access and upstream build stability.
 | Package smoke | `make test-package` | the project installs from `pyproject.toml` and exposes the `ebpf-tv` console script | top-level help and `check --help` |
 | K2 backend contract | `tests/k2_equiv_smoke.py` via CTest | `k2_ebpf_equiv` returns normalized exit codes and JSON | byte-identical pass, return-value fail, stack store/load equivalent pass, map update/lookup pass/fail, packet read pass/fail |
 | K2 instruction semantics | vendored `k2_ebpf_inst_codegen_test` via CTest | selected K2 eBPF instruction, memory, map-helper, map-equivalence, and packet formulas still build and run against modern system Z3 | inherited K2 smoke cases |
-| ELF adapter | `tests/k2_cli_integration.py` via CTest | `ebpf-tv` extracts ELF sections, generates default, auto-extracted legacy, or explicit K2 metadata, and invokes K2 through the single CLI | byte-identical pass, ALU rewrite pass, stack-memory rewrite pass, map update/lookup pass/fail with explicit map metadata, map rewrite pass with auto-extracted legacy map metadata, packet read pass/fail with explicit packet metadata, return-value fail |
+| ELF adapter | `tests/k2_cli_integration.py` via CTest | `ebpf-tv` extracts ELF sections, generates default, section-inferred, auto-extracted legacy, or explicit K2 metadata, and invokes K2 through the single CLI | byte-identical pass, ALU rewrite pass, stack-memory rewrite pass, map update/lookup pass/fail with explicit map metadata, map rewrite pass with auto-extracted legacy map metadata, XDP packet-input inference, packet read pass/fail with explicit packet metadata, return-value fail |
 | CI | `.github/workflows/ci.yml` | fresh Ubuntu build installs dependencies and runs the same local gate | Python 3 packaging tools, clang/llvm, CMake, libz3-dev |
 | Optional PREVAIL smoke | `make test-prevail-smoke`, `.github/workflows/prevail-smoke.yml` | real PREVAIL build and sample fixtures still work at the pinned commit | `add.yaml`, `map.yaml`, `minimal.bpf.o` |
 
@@ -73,6 +73,8 @@ The K2 equivalence path currently has CI coverage for:
   stack value used for the update
 - the same map rewrite through `ebpf-tv check` with K2 metadata generated from a
   legacy ELF `maps` section
+- XDP sections without `--k2-desc` generate K2 packet-input metadata with a
+  bounded default packet size
 - packet byte read at offset 0 versus itself under packet-input metadata
 
 The first checks adapter plumbing. The second checks non-identical ALU
@@ -112,7 +114,8 @@ regular old/new object checks.
 The following are intentionally not claimed yet:
 
 - modern BTF `.maps` metadata extraction
-- automatic program description extraction from ELF/BTF
+- BTF/loader-derived program description extraction beyond section-prefix
+  inference
 - CO-RE relocation modeling
 - helper side effects beyond K2's inherited smoke tests
 - map delete equivalence through `ebpf-tv check`

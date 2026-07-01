@@ -229,7 +229,7 @@ class CliTests(unittest.TestCase):
                     str(old),
                     str(old),
                     "--section",
-                    "xdp",
+                    "tracepoint/syscalls/sys_enter_openat",
                     "--prevail-bin",
                     str(prevail),
                     "--equiv-backend",
@@ -250,6 +250,72 @@ class CliTests(unittest.TestCase):
                 ("k2_env", "generated_k2_environment"),
                 [(stage["name"], stage["reason"]) for stage in result["stages"]],
             )
+            self.assertEqual(result["stages"][-1]["reason"], "k2_equivalence_pass")
+
+    def test_k2_equivalence_backend_auto_infers_xdp_packet_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            obj = tmp_path / "prog.o"
+            obj.write_bytes(b"elf")
+            prevail = make_executable(
+                tmp_path / "prevail",
+                """\
+                #!/usr/bin/env sh
+                echo "PASS: $2/func"
+                """,
+            )
+            objcopy = make_executable(
+                tmp_path / "objcopy",
+                """\
+                #!/usr/bin/env sh
+                spec="${1#--dump-section=}"
+                section="${spec%%=*}"
+                out="${spec#*=}"
+                [ "$section" = "maps" ] && exit 1
+                printf section > "$out"
+                """,
+            )
+            k2_equiv = make_executable(
+                tmp_path / "k2_equiv",
+                """\
+                #!/usr/bin/env sh
+                while [ "$#" -gt 0 ]; do
+                  case "$1" in
+                    --map) shift; map="$1" ;;
+                    --desc) shift; desc="$1" ;;
+                  esac
+                  shift
+                done
+                [ ! -s "$map" ] || exit 2
+                grep -q "pgm_input_type = 1" "$desc" || exit 2
+                grep -q "max_pkt_sz = 64" "$desc" || exit 2
+                exit 0
+                """,
+            )
+
+            completed = run_cli(
+                [
+                    "check",
+                    str(obj),
+                    str(obj),
+                    "--section",
+                    "xdp.frags",
+                    "--prevail-bin",
+                    str(prevail),
+                    "--equiv-backend",
+                    "k2",
+                    "--k2-equiv",
+                    str(k2_equiv),
+                    "--k2-root",
+                    str(tmp_path),
+                    "--objcopy-bin",
+                    str(objcopy),
+                ]
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            result = json.loads(completed.stdout)
+            self.assertEqual(result["result"], "PASS")
             self.assertEqual(result["stages"][-1]["reason"], "k2_equivalence_pass")
 
     def test_k2_equivalence_backend_generates_packet_environment(self) -> None:
@@ -368,7 +434,8 @@ class CliTests(unittest.TestCase):
                 grep -q "key_size = 4" "$map" || exit 2
                 grep -q "value_size = 8" "$map" || exit 2
                 grep -q "max_entries = 16" "$map" || exit 2
-                grep -q "pgm_input_type = 0" "$desc" || exit 2
+                grep -q "pgm_input_type = 1" "$desc" || exit 2
+                grep -q "max_pkt_sz = 64" "$desc" || exit 2
                 exit 0
                 """,
             )

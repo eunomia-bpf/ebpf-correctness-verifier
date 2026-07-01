@@ -21,6 +21,7 @@ UNKNOWN = "UNKNOWN"
 BPF_ALU64_MOV_K = 0xB7
 BPF_EXIT = 0x95
 BPF_MAP_DEF_RECORD_SIZE = 20
+K2_DEFAULT_PACKET_SIZE = 64
 
 K2_INPUT_TYPES = {
     "constant": 0,
@@ -28,6 +29,8 @@ K2_INPUT_TYPES = {
     "pkt-ptrs": 2,
     "skb": 3,
 }
+K2_PACKET_INPUT_TYPES = {"pkt", "pkt-ptrs", "skb"}
+K2_XDP_SECTION_PREFIXES = ("xdp/", "xdp.")
 
 
 @dataclass
@@ -112,6 +115,29 @@ def resolve_objcopy(tool: str) -> str | None:
     if tool != "auto":
         return resolve_tool(tool)
     return shutil.which("llvm-objcopy") or shutil.which("objcopy")
+
+
+def infer_k2_input_type(section: str) -> str:
+    normalized = section.lower()
+    if normalized == "xdp" or normalized.startswith(K2_XDP_SECTION_PREFIXES):
+        return "pkt"
+    return "constant"
+
+
+def resolve_k2_desc_inputs(
+    section: str,
+    requested_input_type: str,
+    requested_max_pkt_size: int,
+) -> tuple[str, int]:
+    input_type = (
+        infer_k2_input_type(section)
+        if requested_input_type == "auto"
+        else requested_input_type
+    )
+    max_pkt_size = requested_max_pkt_size
+    if input_type in K2_PACKET_INPUT_TYPES and max_pkt_size <= 0:
+        max_pkt_size = K2_DEFAULT_PACKET_SIZE
+    return input_type, max_pkt_size
 
 
 def run_prevail(
@@ -421,10 +447,15 @@ def run_k2_elf_equivalence(
                 return stages
             write_k2_maps(map_path, old_maps)
         if not k2_desc:
-            input_type = K2_INPUT_TYPES[k2_input_type]
+            input_type_name, max_pkt_size = resolve_k2_desc_inputs(
+                section,
+                k2_input_type,
+                k2_max_pkt_size,
+            )
+            input_type = K2_INPUT_TYPES[input_type_name]
             desc_path.write_text(
                 f"{{ pgm_input_type = {input_type}, }}\n"
-                f"{{ max_pkt_sz = {k2_max_pkt_size}, }}\n"
+                f"{{ max_pkt_sz = {max_pkt_size}, }}\n"
             )
         if not k2_map or not k2_desc:
             stages.append(
@@ -689,15 +720,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     check_parser.add_argument(
         "--k2-input-type",
-        choices=sorted(K2_INPUT_TYPES),
-        default="constant",
-        help="generated K2 desc input type when --k2-desc is omitted",
+        choices=sorted([*K2_INPUT_TYPES, "auto"]),
+        default="auto",
+        help=(
+            "generated K2 desc input type when --k2-desc is omitted; "
+            "auto infers supported section prefixes"
+        ),
     )
     check_parser.add_argument(
         "--k2-max-pkt-size",
         type=int,
         default=0,
-        help="generated K2 desc max packet size when --k2-desc is omitted",
+        help=(
+            "generated K2 desc max packet size when --k2-desc is omitted; "
+            "packet-like inputs use 64 when this is zero"
+        ),
     )
     check_parser.add_argument(
         "--objcopy-bin",

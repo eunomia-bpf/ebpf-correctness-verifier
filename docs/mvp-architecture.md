@@ -212,12 +212,13 @@ as separate feedback classes.
    clang-produced object, ALU and stack-memory equivalent section rewrites, a
    return-value counterexample, raw K2 map/packet PASS/FAIL fixtures, and
    `ebpf-tv check` ELF-section fixtures with explicit map/packet metadata and
-   automatic legacy map metadata extraction. Automatic desc/BTF/CO-RE extraction
-   remains. Track coverage in `docs/test-plan.md`.
+   automatic legacy map metadata extraction plus XDP packet-desc inference.
+   BTF/CO-RE extraction remains. Track coverage in `docs/test-plan.md`.
 7. In progress: add K2 environment handling. A no-map constant-input default is
    generated automatically, and legacy `SEC("maps")` `bpf_map_def` records are
    converted into K2 `.maps` metadata when old/new metadata matches. Program
-   description, BTF `.maps`, and CO-RE extraction remain.
+   description generation now covers a small section-prefix slice; BTF `.maps`,
+   loader-derived context metadata, and CO-RE extraction remain.
 8. Add Heimdall-derived fixtures for maps, globals, output sinks, atomics, and
    entry-point type checks as backend coverage becomes available.
 9. Add optional kernel verifier load gate and `BPF_PROG_RUN` replay.

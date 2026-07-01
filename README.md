@@ -164,8 +164,10 @@ objects pass, non-identical objects return `UNKNOWN` unless an external
 equivalence backend is configured. The vendored K2 backend can be selected with
 `--equiv-backend k2`; `ebpf-tv` extracts the requested ELF section with
 `llvm-objcopy`/`objcopy`, then calls the K2 raw-instruction checker with
-auto-extracted legacy `maps` metadata, generated constant-input metadata, or
-user-supplied `.maps` and `.desc` metadata.
+auto-extracted legacy `maps` metadata, section-inferred `.desc` metadata, or
+user-supplied `.maps` and `.desc` metadata. The current section inference is
+deliberately small: XDP sections default to K2 packet input with a bounded
+64-byte packet size, and unknown sections default to constant input.
 
 ## Documents
 
@@ -188,7 +190,8 @@ checks byte-identical objects, non-identical equivalent rewrites
 stack store/load), and a return-value counterexample. The raw K2 backend smoke
 also covers explicit map metadata and packet-input metadata with supported
 PASS/FAIL cases, and the ELF-section integration test covers those explicit
-metadata paths plus automatic legacy `maps` extraction through `ebpf-tv check`.
+metadata paths plus automatic legacy `maps` extraction and XDP packet-desc
+inference through `ebpf-tv check`.
 
 The optional `PREVAIL Smoke` workflow can be run manually from GitHub Actions to
 verify the pinned real PREVAIL build and object/YAML fixtures.
@@ -200,4 +203,5 @@ adapter, a conservative equivalence backend contract, vendored K2 source, and a
 modern-Z3 K2 equivalence backend with unit tests and an ELF-section integration
 smoke test. It is not yet a complete CO-RE/BTF-aware object equivalence checker;
 automatic map extraction currently supports only legacy `SEC("maps")`
-`bpf_map_def` records.
+`bpf_map_def` records, and automatic `.desc` generation only handles a small
+section-prefix slice.

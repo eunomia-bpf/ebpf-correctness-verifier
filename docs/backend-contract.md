@@ -116,8 +116,13 @@ Current scope:
 - one shared K2 environment for old/new
 - automatic K2 `.maps` generation from matching legacy ELF `maps` sections
   containing `struct bpf_map_def` records when `--k2-map` is omitted
-- generated empty-map constant-input environment when no legacy `maps` section
-  exists and `--k2-map`/`--k2-desc` are omitted
+- generated empty-map environment when no legacy `maps` section exists and
+  `--k2-map` is omitted
+- generated `.desc` metadata when `--k2-desc` is omitted; `--k2-input-type
+  auto` currently maps XDP section prefixes to K2 packet input and unknown
+  sections to constant input
+- packet-like generated inputs use a 64-byte packet bound when
+  `--k2-max-pkt-size` is left at zero
 - `FAIL` when old/new legacy map metadata differs before equivalence checking
 - explicit `.maps` and `.desc` overrides for programs that need packet, context,
   or map modeling
@@ -128,13 +133,14 @@ Current scope:
 - raw-backend smoke coverage for explicit map metadata and packet-input
   metadata, including supported PASS and FAIL cases
 - ELF-section frontend coverage for explicit map metadata, automatic legacy map
-  extraction, and packet-input metadata through `ebpf-tv check --equiv-backend
-  k2`
+  extraction, section-inferred packet metadata, and packet-input metadata
+  through `ebpf-tv check --equiv-backend k2`
 
 Known gaps:
 
-- no automatic program description extraction yet; generated `.desc` metadata is
-  intentionally only a simple default unless overridden
+- no BTF/loader-derived program description extraction yet; generated `.desc`
+  metadata is intentionally limited to section-prefix inference unless
+  overridden
 - no modern BTF `.maps` extraction or CO-RE relocation modeling yet
 - complex K2 fixtures can still hit old unsupported pointer-model paths and must
   return `UNKNOWN`
