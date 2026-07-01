@@ -54,6 +54,12 @@ Build and run the vendored K2 eBPF semantics smoke test against the system Z3:
 make test-k2-smoke
 ```
 
+Run the CI-covered K2 XDP CLI example:
+
+```bash
+make test-example-k2-xdp
+```
+
 Run the K2-derived raw-instruction equivalence backend directly:
 
 ```bash
@@ -171,6 +177,7 @@ deliberately small: XDP sections default to K2 packet input with a bounded
 
 ## Documents
 
+- [K2 XDP example](examples/k2-xdp/README.md)
 - [Research survey](docs/research-survey.md)
 - [Reuse matrix](docs/reuse-matrix.md)
 - [Heimdall notes](docs/heimdall-notes.md)
@@ -191,7 +198,8 @@ stack store/load), and a return-value counterexample. The raw K2 backend smoke
 also covers explicit map metadata and packet-input metadata with supported
 PASS/FAIL cases, and the ELF-section integration test covers those explicit
 metadata paths plus automatic legacy `maps` extraction and XDP packet-desc
-inference through `ebpf-tv check`.
+inference through `ebpf-tv check`. CI also runs the K2 XDP example script so the
+public example path stays in sync with the tested CLI behavior.
 
 The optional `PREVAIL Smoke` workflow can be run manually from GitHub Actions to
 verify the pinned real PREVAIL build and object/YAML fixtures.

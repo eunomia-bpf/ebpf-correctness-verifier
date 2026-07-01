@@ -1,6 +1,6 @@
-.PHONY: test test-python test-package test-k2-smoke test-prevail-smoke
+.PHONY: test test-python test-package test-k2-smoke test-examples test-example-k2-xdp test-prevail-smoke
 
-test: test-python test-package test-k2-smoke
+test: test-python test-package test-examples
 
 test-python:
 	PYTHONPATH=src python3 -m unittest discover -s tests
@@ -17,6 +17,11 @@ test-k2-smoke:
 	cmake -S . -B build
 	cmake --build build --target k2_ebpf_inst_codegen_test k2_ebpf_equiv -j
 	ctest --test-dir build --output-on-failure
+
+test-examples: test-example-k2-xdp
+
+test-example-k2-xdp: test-k2-smoke
+	scripts/run-k2-xdp-example.sh >/dev/null
 
 test-prevail-smoke:
 	scripts/prevail-smoke.sh
