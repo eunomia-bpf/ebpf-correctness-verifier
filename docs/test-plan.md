@@ -17,6 +17,7 @@ make test
 - Python CLI unit tests
 - package installation and `ebpf-tv` console-script smoke tests in a temporary
   virtual environment
+- installed `ebpf-tv doctor --help` smoke coverage
 - K2 eBPF instruction/codegen smoke tests against the system Z3 library
 - K2 raw equivalence wrapper smoke tests
 - `ebpf-tv check --equiv-backend k2` ELF-section integration tests
@@ -51,8 +52,9 @@ a separate job so the default local `make test` gate stays network-free.
 | Layer | Test entrypoint | What it proves | Current cases |
 | --- | --- | --- | --- |
 | CLI orchestration | `tests/test_cli.py` | `ebpf-tv` combines backend results as `FAIL > UNKNOWN > PASS` | identity pass, non-identical unknown, PREVAIL reject, missing PREVAIL, external fail |
+| Dependency diagnostics | `tests/test_cli.py`, `make test-package` | `ebpf-tv doctor` reports local PREVAIL, K2, K2 root, Z3 wrapper, and objcopy readiness without running a proof | configured fake tools return `PASS`, missing tools return `UNKNOWN`, installed console script exposes `doctor --help` |
 | Capability contract | `tests/test_cli.py` | `ebpf-tv capabilities` exposes the dependency policy, supported K2 slice, and known gaps as a stable CLI surface | JSON dependency policy, K2 legacy-map, BTF guard, and XDP-desc features, BTF/CO-RE gaps, text output |
-| Package smoke | `make test-package` | the project installs from `pyproject.toml` and exposes the `ebpf-tv` console script | top-level help, `check --help`, and `capabilities` |
+| Package smoke | `make test-package` | the project installs from `pyproject.toml` and exposes the `ebpf-tv` console script | top-level help, `check --help`, `doctor --help`, and `capabilities` |
 | K2 backend contract | `tests/k2_equiv_smoke.py` via CTest | `k2_ebpf_equiv` returns normalized exit codes, JSON, and backend provenance | `--version` K2/Z3 report, byte-identical pass, return-value fail, stack store/load equivalent pass, map update/lookup pass/fail, packet read pass/fail |
 | K2 instruction semantics | vendored `k2_ebpf_inst_codegen_test` via CTest | selected K2 eBPF instruction, memory, map-helper, map-equivalence, and packet formulas still build and run against modern system Z3 | inherited K2 smoke cases |
 | Upstream Z3 release | `make test-k2-z3-release`, CI `upstream-z3` job | the vendored K2 wrapper builds and runs against the pinned official Z3 release, not only distro `libz3-dev` | sha256-verified Z3 4.16.0 binary release, K2 CTest suite, wrapper version JSON |

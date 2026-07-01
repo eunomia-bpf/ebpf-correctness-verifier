@@ -156,6 +156,21 @@ The CLI returns JSON by default:
 }
 ```
 
+## Diagnostics
+
+Use `ebpf-tv doctor` to check local dependency wiring without running a
+transformation proof:
+
+```bash
+ebpf-tv doctor \
+  --prevail-bin /path/to/prevail \
+  --k2-equiv build/k2_ebpf_equiv \
+  --k2-root third_party/k2-superopt
+```
+
+The command reports PREVAIL, K2, Z3, K2 root, and objcopy readiness using the
+same `PASS`/`UNKNOWN`/`FAIL` result model as `check`.
+
 ## Current Design
 
 The implementation is deliberately not a from-scratch symbolic executor. The
@@ -176,6 +191,8 @@ system Z3 library, avoiding K2's old requirement for a sibling
 Z3 and PREVAIL are intentionally not default submodules. Z3 is consumed as a
 system solver library (`libz3-dev` in CI), while PREVAIL is consumed as an
 external CLI through `--prevail-bin` with an optional pinned smoke workflow.
+`ebpf-tv doctor` reports whether the configured local binaries and K2 root are
+usable, and includes the K2 wrapper's Z3 version report when available.
 See [Dependency policy](docs/dependency-policy.md) for the maintainer contract.
 
 The v0 rule is:

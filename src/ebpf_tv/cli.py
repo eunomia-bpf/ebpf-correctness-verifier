@@ -205,6 +205,21 @@ def capabilities(args: argparse.Namespace) -> int:
     return 0
 
 
+def emit_validation_result(result: ValidationResult, output: str) -> None:
+    if output == "json":
+        print(result.to_json())
+    else:
+        print(result.result)
+        for stage in result.stages:
+            suffix = f" ({stage.reason})" if stage.reason else ""
+            detail = (
+                f": {stage.stdout}"
+                if stage.stdout and "\n" not in stage.stdout
+                else ""
+            )
+            print(f"{stage.name}: {stage.result}{suffix}{detail}")
+
+
 def run_command(command: list[str], timeout: int) -> StageResult:
     try:
         completed = subprocess.run(
@@ -251,6 +266,86 @@ def resolve_objcopy(tool: str) -> str | None:
     if tool != "auto":
         return resolve_tool(tool)
     return shutil.which("llvm-objcopy") or shutil.which("objcopy")
+
+
+def locate_tool_stage(
+    name: str,
+    configured_tool: str,
+    resolved_tool: str | None,
+    found_reason: str,
+    missing_reason: str,
+) -> StageResult:
+    if resolved_tool:
+        return StageResult(
+            name=name,
+            result=PASS,
+            reason=found_reason,
+            command=[configured_tool],
+            stdout=resolved_tool,
+        )
+    return StageResult(
+        name=name,
+        result=UNKNOWN,
+        reason=missing_reason,
+        command=[configured_tool],
+    )
+
+
+def diagnose_k2_root(k2_root: str | None) -> StageResult:
+    if not k2_root:
+        return StageResult(
+            name="doctor_k2_root",
+            result=UNKNOWN,
+            reason="k2_root_not_configured",
+        )
+    path = Path(k2_root)
+    if not path.exists():
+        return StageResult(
+            name="doctor_k2_root",
+            result=UNKNOWN,
+            reason="k2_root_not_found",
+            stdout=str(path),
+        )
+    if not path.is_dir():
+        return StageResult(
+            name="doctor_k2_root",
+            result=FAIL,
+            reason="k2_root_not_directory",
+            stdout=str(path),
+        )
+    return StageResult(
+        name="doctor_k2_root",
+        result=PASS,
+        reason="k2_root_found",
+        stdout=str(path),
+    )
+
+
+def diagnose_k2_equiv(k2_equiv: str, timeout: int) -> StageResult:
+    tool = resolve_tool(k2_equiv)
+    if tool is None:
+        return StageResult(
+            name="doctor_k2_equiv",
+            result=UNKNOWN,
+            reason="k2_equiv_not_found",
+            command=[k2_equiv],
+        )
+
+    stage = run_command([tool, "--version"], timeout)
+    stage.name = "doctor_k2_equiv"
+    if stage.exit_code == 0:
+        try:
+            json.loads(stage.stdout)
+        except json.JSONDecodeError:
+            stage.result = UNKNOWN
+            stage.reason = "k2_equiv_version_unrecognized"
+        else:
+            stage.result = PASS
+            stage.reason = "k2_equiv_version"
+    elif stage.result == FAIL:
+        stage.result = UNKNOWN
+        stage.reason = "k2_equiv_version_failed"
+    return stage
 
 
 def infer_k2_input_type(section: str) -> str:
@@ -958,13 +1053,37 @@ def check(args: argparse.Namespace) -> int:
             )
 
     result = ValidationResult(combine(stages), stages)
-    if args.output == "json":
-        print(result.to_json())
-    else:
-        print(result.result)
-        for stage in result.stages:
-            suffix = f" ({stage.reason})" if stage.reason else ""
-            print(f"{stage.name}: {stage.result}{suffix}")
+    emit_validation_result(result, args.output)
+    return 0 if result.result == PASS else 1
+
+
+def doctor(args: argparse.Namespace) -> int:
+    stages = [
+        StageResult(
+            name="doctor_ebpf_tv",
+            result=PASS,
+            reason="package_version",
+            stdout=__version__,
+        ),
+        locate_tool_stage(
+            "doctor_prevail",
+            args.prevail_bin,
+            resolve_tool(args.prevail_bin),
+            "prevail_found",
+            "prevail_not_found",
+        ),
+        locate_tool_stage(
+            "doctor_objcopy",
+            args.objcopy_bin,
+            resolve_objcopy(args.objcopy_bin),
+            "objcopy_found",
+            "objcopy_not_found",
+        ),
+        diagnose_k2_root(args.k2_root),
+        diagnose_k2_equiv(args.k2_equiv, args.timeout),
+    ]
+    result = ValidationResult(combine(stages), stages)
+    emit_validation_result(result, args.output)
     return 0 if result.result == PASS else 1
 
 
@@ -987,7 +1106,7 @@ def selftest(args: argparse.Namespace) -> int:
     if args.k2_equiv or args.k2_root:
         stages.append(run_k2_equiv_smoke(args.k2_equiv, args.k2_root, args.timeout))
     result = ValidationResult(combine(stages), stages)
-    print(result.to_json())
+    emit_validation_result(result, "json")
     return 0 if result.result == PASS else 1
 
 
@@ -1094,6 +1213,22 @@ def build_parser() -> argparse.ArgumentParser:
     selftest_parser.add_argument("--k2-root")
     selftest_parser.add_argument("--timeout", type=int, default=120)
     selftest_parser.set_defaults(func=selftest)
+
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        help="diagnose PREVAIL, K2, Z3, and objcopy wiring",
+    )
+    doctor_parser.add_argument("--prevail-bin", default="prevail")
+    doctor_parser.add_argument("--k2-equiv", default="k2_ebpf_equiv")
+    doctor_parser.add_argument("--k2-root")
+    doctor_parser.add_argument(
+        "--objcopy-bin",
+        default="auto",
+        help="tool used to dump ELF sections; 'auto' prefers llvm-objcopy then objcopy",
+    )
+    doctor_parser.add_argument("--timeout", type=int, default=30)
+    doctor_parser.add_argument("--output", choices=["text", "json"], default="json")
+    doctor_parser.set_defaults(func=doctor)
 
     capabilities_parser = subparsers.add_parser(
         "capabilities",

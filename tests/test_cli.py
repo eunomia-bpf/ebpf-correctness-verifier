@@ -1201,6 +1201,94 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result["result"], "PASS")
             self.assertEqual(result["stages"][1]["reason"], "k2_equiv_pass_fail_smoke")
 
+    def test_doctor_reports_pass_for_configured_tools(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            prevail = make_executable(
+                tmp_path / "prevail",
+                """\
+                #!/usr/bin/env sh
+                exit 0
+                """,
+            )
+            objcopy = make_executable(
+                tmp_path / "objcopy",
+                """\
+                #!/usr/bin/env sh
+                exit 0
+                """,
+            )
+            k2_equiv = make_executable(
+                tmp_path / "k2_equiv",
+                """\
+                #!/usr/bin/env sh
+                printf '{"k2":{"vendored_commit":"f50ee1f"},"z3":{"full_version":"Z3 4.16.0.0"}}\\n'
+                """,
+            )
+
+            completed = run_cli(
+                [
+                    "doctor",
+                    "--prevail-bin",
+                    str(prevail),
+                    "--objcopy-bin",
+                    str(objcopy),
+                    "--k2-equiv",
+                    str(k2_equiv),
+                    "--k2-root",
+                    str(tmp_path),
+                ]
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            result = json.loads(completed.stdout)
+            self.assertEqual(result["result"], "PASS")
+            stages = {stage["name"]: stage for stage in result["stages"]}
+            self.assertEqual(stages["doctor_prevail"]["reason"], "prevail_found")
+            self.assertEqual(stages["doctor_objcopy"]["reason"], "objcopy_found")
+            self.assertEqual(stages["doctor_k2_root"]["reason"], "k2_root_found")
+            self.assertEqual(stages["doctor_k2_equiv"]["reason"], "k2_equiv_version")
+            self.assertIn("Z3 4.16.0.0", stages["doctor_k2_equiv"]["stdout"])
+
+    def test_doctor_reports_unknown_for_missing_tools(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            missing = tmp_path / "missing"
+
+            completed = run_cli(
+                [
+                    "doctor",
+                    "--prevail-bin",
+                    str(missing),
+                    "--objcopy-bin",
+                    str(missing),
+                    "--k2-equiv",
+                    str(missing),
+                    "--k2-root",
+                    str(missing),
+                ]
+            )
+
+            self.assertEqual(completed.returncode, 1)
+            result = json.loads(completed.stdout)
+            self.assertEqual(result["result"], "UNKNOWN")
+            self.assertIn(
+                ("doctor_prevail", "prevail_not_found"),
+                [(stage["name"], stage["reason"]) for stage in result["stages"]],
+            )
+            self.assertIn(
+                ("doctor_objcopy", "objcopy_not_found"),
+                [(stage["name"], stage["reason"]) for stage in result["stages"]],
+            )
+            self.assertIn(
+                ("doctor_k2_root", "k2_root_not_found"),
+                [(stage["name"], stage["reason"]) for stage in result["stages"]],
+            )
+            self.assertIn(
+                ("doctor_k2_equiv", "k2_equiv_not_found"),
+                [(stage["name"], stage["reason"]) for stage in result["stages"]],
+            )
+
     def test_capabilities_json_describes_dependency_policy(self) -> None:
         completed = run_cli(["capabilities"])
 

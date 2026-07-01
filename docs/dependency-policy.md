@@ -28,6 +28,18 @@ make test-k2-smoke          # distribution libz3-dev
 make test-k2-z3-release    # pinned upstream Z3 release zip
 ```
 
+Local tool wiring can be inspected without running a transformation proof:
+
+```bash
+ebpf-tv doctor \
+  --prevail-bin /path/to/prevail \
+  --k2-equiv build/k2_ebpf_equiv \
+  --k2-root third_party/k2-superopt
+```
+
+The diagnostic command keeps the same tri-state model as `check`: missing
+optional external tools return `UNKNOWN`, not `PASS`.
+
 The upstream-release smoke downloads the official `z3-4.16.0` Linux binary
 release, verifies its sha256, builds K2 against that release's headers and
 library, runs the K2 CTest suite, and checks `k2_ebpf_equiv --version`.
