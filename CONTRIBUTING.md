@@ -15,6 +15,22 @@ python3 -m venv .venv
 python3 -m pip install -e .
 ```
 
+On Ubuntu 24.04, install the same host tools used by CI:
+
+```bash
+sudo apt-get install -y --no-install-recommends \
+  clang \
+  cmake \
+  g++ \
+  libz3-dev \
+  llvm \
+  python3 \
+  python3-pip \
+  python3-setuptools \
+  python3-venv \
+  python3-wheel
+```
+
 Build the K2-derived backend against the system Z3:
 
 ```bash

@@ -171,6 +171,28 @@ ebpf-tv doctor \
 The command reports PREVAIL, K2, Z3, K2 root, and objcopy readiness using the
 same `PASS`/`UNKNOWN`/`FAIL` result model as `check`.
 
+## System Dependencies
+
+On Ubuntu 24.04, the default CI gate installs:
+
+```bash
+sudo apt-get install -y --no-install-recommends \
+  clang \
+  cmake \
+  g++ \
+  libz3-dev \
+  llvm \
+  python3 \
+  python3-pip \
+  python3-setuptools \
+  python3-venv \
+  python3-wheel
+```
+
+`make test-k2-z3-release` also needs `curl` and `unzip` to download and verify
+the pinned upstream Z3 release. PREVAIL is optional for the default gate; use
+`make test-prevail-smoke` when you need the real PREVAIL integration smoke.
+
 ## Current Design
 
 The implementation is deliberately not a from-scratch symbolic executor. The
